@@ -70,7 +70,7 @@ The system should prioritize perceptual similarity rather than filename similari
 - Basic error logging
 
 ### Excluded from Version 1
-
+  
 - Cloud synchronization
 - User accounts
 - Online sample stores
