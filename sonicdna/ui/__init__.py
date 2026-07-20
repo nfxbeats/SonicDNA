@@ -1,0 +1,2 @@
+"""SonicDNA desktop user interface."""
+

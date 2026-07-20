@@ -1,0 +1,428 @@
+"""Main SonicDNA desktop window."""
+
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+from PySide6.QtCore import QSettings, QThread, QTimer, Qt
+from PySide6.QtGui import (
+    QAction,
+    QBrush,
+    QCloseEvent,
+    QColor,
+    QDragEnterEvent,
+    QDropEvent,
+    QKeySequence,
+    QShortcut,
+)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QCheckBox,
+    QFileDialog,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QMessageBox,
+    QMenu,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from sonicdna.database import default_database_path
+from sonicdna.features import SUPPORTED_EXTENSIONS
+from sonicdna.indexing import ScanSummary
+from sonicdna.platform_actions import open_file, reveal_file
+from sonicdna.playback import create_audio_player
+from sonicdna.search import SearchResult
+from sonicdna.ui.results_table import ResultsTable
+from sonicdna.workers import LibraryWorker
+
+
+class MainWindow(QMainWindow):
+    """Library, query, and search workflow for the Phase 3 application."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setWindowTitle("SonicDNA")
+        self.setMinimumSize(900, 620)
+        self.setAcceptDrops(True)
+        self.settings = QSettings("SonicDNA", "SonicDNA")
+        self.worker_thread: QThread | None = None
+        self.worker: LibraryWorker | None = None
+        self.query_path: Path | None = None
+        self.current_results: list[SearchResult] = []
+        self.playing_row = -1
+        self._close_pending = False
+        self._build_ui()
+        self._build_audio()
+        self._restore_settings()
+
+    def _build_ui(self) -> None:
+        root = QWidget()
+        layout = QVBoxLayout(root)
+
+        library_group = QGroupBox("Sample Libraries")
+        library_layout = QGridLayout(library_group)
+        self.folder_list = QListWidget()
+        self.folder_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        library_layout.addWidget(self.folder_list, 0, 0, 4, 1)
+        add_button = QPushButton("Add Folder")
+        add_button.clicked.connect(self.add_folder)
+        remove_button = QPushButton("Remove Folder")
+        remove_button.clicked.connect(self.remove_folders)
+        self.scan_button = QPushButton("Scan / Update")
+        self.scan_button.clicked.connect(self.scan)
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.clicked.connect(self.cancel_work)
+        library_layout.addWidget(add_button, 0, 1)
+        library_layout.addWidget(remove_button, 1, 1)
+        library_layout.addWidget(self.scan_button, 2, 1)
+        library_layout.addWidget(self.cancel_button, 3, 1)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.status = QLabel(f"Index: {default_database_path()}")
+        library_layout.addWidget(self.progress, 4, 0, 1, 2)
+        library_layout.addWidget(self.status, 5, 0, 1, 2)
+        layout.addWidget(library_group)
+
+        query_group = QGroupBox("Query Sample (or drop an audio file anywhere)")
+        query_layout = QHBoxLayout(query_group)
+        self.query_label = QLabel("No query selected")
+        self.query_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        browse_button = QPushButton("Browse")
+        browse_button.clicked.connect(self.browse_query)
+        play_query = QPushButton("Play")
+        play_query.clicked.connect(self.play_query)
+        stop_button = QPushButton("Stop")
+        stop_button.clicked.connect(self.stop_audio)
+        self.find_button = QPushButton("Find Similar")
+        self.find_button.clicked.connect(self.find_similar)
+        self.result_count = QSpinBox()
+        self.result_count.setRange(1, 1000)
+        self.result_count.setValue(25)
+        query_layout.addWidget(self.query_label, 1)
+        query_layout.addWidget(browse_button)
+        query_layout.addWidget(play_query)
+        query_layout.addWidget(stop_button)
+        query_layout.addWidget(QLabel("Results:"))
+        query_layout.addWidget(self.result_count)
+        query_layout.addWidget(self.find_button)
+        layout.addWidget(query_group)
+
+        result_controls = QHBoxLayout()
+        play_result = QPushButton("Play Selected")
+        play_result.clicked.connect(self.play_selected_result)
+        stop_result = QPushButton("Stop")
+        stop_result.clicked.connect(self.stop_audio)
+        export_button = QPushButton("Export Results to CSV")
+        export_button.clicked.connect(self.export_csv)
+        self.auto_audition = QCheckBox("Auto-play selection")
+        self.auto_audition.setChecked(True)
+        result_controls.addWidget(play_result)
+        result_controls.addWidget(stop_result)
+        result_controls.addWidget(self.auto_audition)
+        result_controls.addStretch(1)
+        result_controls.addWidget(export_button)
+        layout.addLayout(result_controls)
+
+        self.results = ResultsTable(0, 5)
+        self.results.setHorizontalHeaderLabels(
+            ["Rank", "Similarity", "State", "Filename", "Full path"]
+        )
+        self.results.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.results.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.results.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.results.setDragEnabled(True)
+        self.results.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.results.setDefaultDropAction(Qt.DropAction.CopyAction)
+        self.results.setSortingEnabled(False)
+        self.results.doubleClicked.connect(self.play_selected_result)
+        self.results.currentCellChanged.connect(self._result_selection_changed)
+        self.results.selected_row_clicked_again.connect(self.play_selected_result)
+        self.results.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.results.customContextMenuRequested.connect(self.show_result_menu)
+        self.results.horizontalHeader().setStretchLastSection(True)
+        self.results.setColumnWidth(0, 60)
+        self.results.setColumnWidth(1, 90)
+        self.results.setColumnWidth(2, 60)
+        self.results.setColumnWidth(3, 250)
+        layout.addWidget(self.results, 1)
+        self.setCentralWidget(root)
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self, activated=self.play_selected_result)
+
+    def _build_audio(self) -> None:
+        volume = float(self.settings.value("preview_volume", 0.8))
+        self.player, self.playback_backend = create_audio_player(volume, self)
+        self.player.playing_changed.connect(self._playback_state_changed)
+
+    def _restore_settings(self) -> None:
+        geometry = self.settings.value("window_geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        folders = self.settings.value("library_folders", [])
+        if isinstance(folders, str):
+            folders = [folders]
+        for folder in folders:
+            if Path(folder).is_dir():
+                self.folder_list.addItem(folder)
+        self.result_count.setValue(int(self.settings.value("result_count", 25)))
+        self.auto_audition.setChecked(
+            self.settings.value("auto_audition", True, type=bool)
+        )
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self._close_pending = True
+            self.cancel_work()
+            event.ignore()
+            return
+        self.settings.setValue("window_geometry", self.saveGeometry())
+        self.settings.setValue("library_folders", [
+            self.folder_list.item(row).text() for row in range(self.folder_list.count())
+        ])
+        self.settings.setValue("result_count", self.result_count.value())
+        self.settings.setValue("auto_audition", self.auto_audition.isChecked())
+        self.settings.setValue("preview_volume", float(self.settings.value("preview_volume", 0.8)))
+        self.stop_audio()
+        self.player.close()
+        self.cancel_work()
+        event.accept()
+
+    def folders(self) -> list[Path]:
+        return [Path(self.folder_list.item(row).text()) for row in range(self.folder_list.count())]
+
+    def add_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Add Sample Library")
+        if folder and folder not in [str(path) for path in self.folders()]:
+            self.folder_list.addItem(folder)
+
+    def remove_folders(self) -> None:
+        for item in self.folder_list.selectedItems():
+            self.folder_list.takeItem(self.folder_list.row(item))
+
+    def browse_query(self) -> None:
+        pattern = "Audio files (*.wav *.flac *.aiff *.aif *.ogg *.mp3);;All files (*)"
+        filename, _ = QFileDialog.getOpenFileName(self, "Select Query Sample", "", pattern)
+        if filename:
+            self.set_query(Path(filename))
+
+    def set_query(self, path: Path) -> None:
+        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            self.query_path = path.resolve()
+            self.query_label.setText(str(self.query_path))
+            self.query_label.setToolTip(str(self.query_path))
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        urls = event.mimeData().urls()
+        if urls and urls[0].isLocalFile():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        urls = event.mimeData().urls()
+        if urls:
+            self.set_query(Path(urls[0].toLocalFile()))
+            event.acceptProposedAction()
+
+    def scan(self) -> None:
+        if not self.folders():
+            QMessageBox.information(self, "SonicDNA", "Add at least one library folder first.")
+            return
+        self._start_worker(None)
+
+    def find_similar(self) -> None:
+        if self.query_path is None:
+            QMessageBox.information(self, "SonicDNA", "Select or drop a query sample first.")
+            return
+        if not self.folders():
+            QMessageBox.information(self, "SonicDNA", "Add at least one library folder first.")
+            return
+        self._start_worker(self.query_path)
+
+    def _start_worker(self, query: Path | None) -> None:
+        if self.worker_thread is not None:
+            return
+        self.progress.setValue(0)
+        self.status.setText("Starting scan…")
+        self.scan_button.setEnabled(False)
+        self.find_button.setEnabled(False)
+        self.cancel_button.setEnabled(True)
+        self.worker_thread = QThread(self)
+        self.worker = LibraryWorker(self.folders(), query, self.result_count.value())
+        self.worker.moveToThread(self.worker_thread)
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self._on_progress)
+        self.worker.folder_complete.connect(self._on_folder_complete)
+        self.worker.results_ready.connect(self._show_results)
+        self.worker.failed.connect(self._show_error)
+        self.worker.finished.connect(self._work_finished)
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker_thread.finished.connect(self.worker.deleteLater)
+        self.worker_thread.finished.connect(self._thread_finished)
+        self.worker_thread.start()
+
+    def cancel_work(self) -> None:
+        if self.worker is not None:
+            self.worker.cancel()
+            self.status.setText("Cancelling after the current file…")
+
+    def _on_progress(self, path: str, current: int, total: int) -> None:
+        self.progress.setValue(round(current / max(total, 1) * 100))
+        self.status.setText(f"Scanning {current}/{total}: {Path(path).name}")
+
+    def _on_folder_complete(self, folder: str, summary: ScanSummary) -> None:
+        self.status.setText(
+            f"{Path(folder).name}: {summary.indexed} indexed, "
+            f"{summary.unchanged} unchanged, {len(summary.errors)} skipped"
+        )
+
+    def _show_results(self, results: list[SearchResult]) -> None:
+        self.current_results = results
+        self.playing_row = -1
+        self.results.setRowCount(len(results))
+        for row, result in enumerate(results):
+            rank = QTableWidgetItem(str(row + 1))
+            score = QTableWidgetItem(f"{result.similarity_score:.2f}")
+            state = QTableWidgetItem("")
+            filename = QTableWidgetItem(result.path.name)
+            full_path = QTableWidgetItem(str(result.path))
+            full_path.setData(Qt.ItemDataRole.UserRole, str(result.path))
+            for column, item in enumerate((rank, score, state, filename, full_path)):
+                self.results.setItem(row, column, item)
+        self.status.setText(f"Found {len(results)} similar sample(s).")
+
+    def _show_error(self, message: str) -> None:
+        self.status.setText("Operation failed")
+        QMessageBox.critical(self, "SonicDNA Error", message)
+
+    def _work_finished(self, cancelled: bool) -> None:
+        if cancelled:
+            self.status.setText("Operation cancelled; completed records were preserved.")
+        else:
+            self.progress.setValue(100)
+        self.scan_button.setEnabled(True)
+        self.find_button.setEnabled(True)
+        self.cancel_button.setEnabled(False)
+
+    def _thread_finished(self) -> None:
+        if self.worker_thread is not None:
+            self.worker_thread.deleteLater()
+        self.worker_thread = None
+        self.worker = None
+        if self._close_pending:
+            QTimer.singleShot(0, self.close)
+
+    def play_path(self, path: Path) -> None:
+        if not path.is_file():
+            QMessageBox.warning(self, "SonicDNA", f"File no longer exists:\n{path}")
+            return
+        self.player.stop()
+        try:
+            self.player.play(path)
+            self.status.setText(f"Playing {path.name} via {self.playback_backend}")
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(self, "SonicDNA Playback", str(exc))
+
+    def play_query(self) -> None:
+        if self.query_path is not None:
+            self.playing_row = -1
+            self.play_path(self.query_path)
+
+    def play_selected_result(self) -> None:
+        row = self.results.currentRow()
+        if row >= 0:
+            item = self.results.item(row, 4)
+            self.playing_row = row
+            self.play_path(Path(item.data(Qt.ItemDataRole.UserRole)))
+
+    def _result_selection_changed(
+        self, current_row: int, _current_column: int, previous_row: int, _previous_column: int
+    ) -> None:
+        if current_row >= 0 and current_row != previous_row and self.auto_audition.isChecked():
+            self.play_selected_result()
+
+    def stop_audio(self) -> None:
+        self.player.stop()
+
+    def _playback_state_changed(self, playing_now: bool) -> None:
+        for row in range(self.results.rowCount()):
+            state_item = self.results.item(row, 2)
+            if state_item is None:
+                continue
+            playing = row == self.playing_row and playing_now
+            state_item.setText("▶" if playing else "")
+            brush = QBrush(QColor("#d8f3dc")) if playing else QBrush()
+            for column in range(self.results.columnCount()):
+                item = self.results.item(row, column)
+                if item is not None:
+                    item.setBackground(brush)
+
+    def selected_result_path(self) -> Path | None:
+        paths = self.results.selected_paths()
+        return paths[0] if paths else None
+
+    def show_result_menu(self, position) -> None:
+        clicked = self.results.itemAt(position)
+        if clicked is not None and clicked.row() not in {
+            index.row() for index in self.results.selectedIndexes()
+        }:
+            self.results.selectRow(clicked.row())
+        path = self.selected_result_path()
+        if path is None:
+            return
+        menu = QMenu(self)
+        play_action = QAction("Play", self)
+        play_action.triggered.connect(self.play_selected_result)
+        reveal_action = QAction("Reveal in File Manager", self)
+        reveal_action.triggered.connect(lambda: self._file_action(reveal_file, path))
+        open_action = QAction("Open with Default Application", self)
+        open_action.triggered.connect(lambda: self._file_action(open_file, path))
+        copy_path_action = QAction("Copy Full Path", self)
+        copy_path_action.triggered.connect(
+            lambda: self._copy_text(str(path))
+        )
+        copy_name_action = QAction("Copy Filename", self)
+        copy_name_action.triggered.connect(lambda: self._copy_text(path.name))
+        menu.addActions([play_action, reveal_action, open_action])
+        menu.addSeparator()
+        menu.addActions([copy_path_action, copy_name_action])
+        menu.exec(self.results.viewport().mapToGlobal(position))
+
+    def _file_action(self, action, path: Path) -> None:
+        try:
+            action(path)
+        except (OSError, RuntimeError) as exc:
+            QMessageBox.warning(self, "SonicDNA", str(exc))
+
+    def _copy_text(self, text: str) -> None:
+        QApplication.clipboard().setText(text)
+
+    def export_csv(self) -> None:
+        if not self.current_results:
+            QMessageBox.information(self, "SonicDNA", "There are no results to export.")
+            return
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Export SonicDNA Results", "sonicdna-results.csv", "CSV files (*.csv)"
+        )
+        if not filename:
+            return
+        try:
+            with Path(filename).open("w", newline="", encoding="utf-8-sig") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["Rank", "Similarity", "Filename", "Full path"])
+                for rank, result in enumerate(self.current_results, 1):
+                    writer.writerow([
+                        rank, f"{result.similarity_score:.2f}", result.path.name, result.path
+                    ])
+            self.status.setText(f"Exported {len(self.current_results)} results to {filename}")
+        except OSError as exc:
+            QMessageBox.warning(self, "SonicDNA", f"Could not export results:\n{exc}")
