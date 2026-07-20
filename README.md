@@ -83,6 +83,29 @@ specific location, use `--database D:\path\to\index.db`.
 Scores are relative values from 0 to 100 and results are ordered from most to least similar.
 They are useful for ranking, but are not calibrated probabilities or percentages.
 
+## Similarity weights
+
+Open **Similarity Weights…** above the results list to control which acoustic characteristics
+matter most when SonicDNA ranks matches. A higher value gives that characteristic more influence;
+a lower value makes it less important. Setting a weight to `0.00` removes that characteristic
+from the comparison.
+
+| Weight | Default | Purpose |
+| --- | ---: | --- |
+| Body / Pitch | `0.90` | Prioritizes the dominant low-frequency peak and relative energy across bass and frequency bands. This is especially important for matching kicks with a similar fundamental body. |
+| Attack | `0.85` | Compares how quickly the transient reaches its peak and the balance between the initial transient and the body. Increase it to favor similarly sharp or soft hits. |
+| Decay | `0.70` | Compares how quickly the sound falls from its peak toward 50%, 20%, and 5% amplitude. Increase it to distinguish short, tight hits from longer tails. |
+| Brightness | `0.50` | Uses spectral centroid, bandwidth, and rolloff to compare dark and bright samples. |
+| Timbre | `0.70` | Compares MFCCs, mel-spectrum shape, and energy statistics. This captures the broader tone and spectral character of a sample. |
+| Noise / Distortion | `0.45` | Uses spectral flatness and zero-crossing behavior to compare clean, noisy, distorted, or textured sounds. |
+| Duration | `0.40` | Compares total analyzed sample length. Increase it when similarly timed one-shots are important. |
+
+The defaults are tuned as a general kick-drum profile. Use **Reset Defaults** in the popup to
+restore them. Accepted weights persist across application restarts.
+
+Weights are applied to standardized feature vectors during search. Changing them does not alter
+audio files or require re-indexing; run **Find Similar** again to apply the new ranking.
+
 ## Development
 
 ```powershell
