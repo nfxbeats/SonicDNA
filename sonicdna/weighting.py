@@ -18,6 +18,37 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "duration": 0.40,
 }
 
+BUILTIN_PRESETS: dict[str, dict[str, float]] = {
+    "Kick": dict(DEFAULT_WEIGHTS),
+    "Snare": {
+        "body_pitch": 0.45,
+        "attack": 0.90,
+        "decay": 0.75,
+        "brightness": 0.75,
+        "timbre": 0.80,
+        "noise": 0.75,
+        "duration": 0.55,
+    },
+    "Sub Bass": {
+        "body_pitch": 1.00,
+        "attack": 0.45,
+        "decay": 0.80,
+        "brightness": 0.15,
+        "timbre": 0.55,
+        "noise": 0.20,
+        "duration": 0.65,
+    },
+    "Hi-Hat": {
+        "body_pitch": 0.15,
+        "attack": 0.90,
+        "decay": 0.65,
+        "brightness": 0.95,
+        "timbre": 0.75,
+        "noise": 0.90,
+        "duration": 0.55,
+    },
+}
+
 WEIGHT_LABELS: dict[str, str] = {
     "body_pitch": "Body / Pitch",
     "attack": "Attack",
@@ -62,4 +93,3 @@ def feature_weight_vector(weights: Mapping[str, float] | None = None) -> np.ndar
     if np.any(vector == 0) and all(value > 0 for value in normalized.values()):
         raise ValueError("one or more feature dimensions are not assigned to a weight group")
     return vector
-

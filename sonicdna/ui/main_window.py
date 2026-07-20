@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from PySide6.QtCore import QItemSelectionModel, QSettings, QThread, QTimer, Qt
@@ -475,13 +476,35 @@ class MainWindow(QMainWindow):
         return normalize_weights(values)
 
     def open_weights_dialog(self) -> None:
-        dialog = WeightsDialog(self.similarity_weights(), self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        dialog = WeightsDialog(
+            self.similarity_weights(), self.custom_weight_presets(), parent=self
+        )
+        result = dialog.exec()
+        self.settings.setValue(
+            "similarity_weight_presets",
+            json.dumps(dialog.saved_presets(), sort_keys=True),
+        )
+        self.settings.sync()
+        if result != QDialog.DialogCode.Accepted:
             return
         for key, value in dialog.values().items():
             self.settings.setValue(f"similarity_weights/{key}", value)
         self.settings.sync()
         self.status.setText("Similarity weights updated; run Find Similar to apply them.")
+
+    def custom_weight_presets(self) -> dict[str, dict[str, float]]:
+        raw = str(self.settings.value("similarity_weight_presets", "{}"))
+        try:
+            values = json.loads(raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        if not isinstance(values, dict):
+            return {}
+        return {
+            str(name): normalize_weights(weights)
+            for name, weights in values.items()
+            if isinstance(weights, dict)
+        }
 
     def export_csv(self) -> None:
         if not self.current_results:

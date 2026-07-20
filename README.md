@@ -1,8 +1,51 @@
 # SonicDNA
 
-SonicDNA is a local-first acoustic similarity search tool for audio samples. This repository
-currently implements the Phase 3 desktop application, command-line search engine, and persistent
-incremental index described in the project spec.
+SonicDNA is a local-first desktop application for finding acoustically similar audio samples. It
+includes a graphical interface, command-line search, and a persistent incremental index.
+
+## Installation
+
+### Requirements
+
+- Python 3.12 or newer
+- Windows 10/11, a current macOS release, or a modern Linux desktop
+- An available audio-output device for sample preview
+
+Download or clone the project, then open a terminal in the SonicDNA directory. The supplied
+launcher creates an isolated `.venv` virtual environment and installs SonicDNA and its Python
+dependencies automatically on the first run. The initial installation can take several minutes.
+
+On Windows:
+
+```powershell
+.\start.bat
+```
+
+Alternatively, use the PowerShell launcher:
+
+```powershell
+.\start.ps1
+```
+
+On macOS or Linux:
+
+```sh
+chmod +x start.sh
+./start.sh
+```
+
+Linux systems may require the distribution's PortAudio package for low-latency preview. If the
+`sounddevice` backend is unavailable, SonicDNA automatically attempts to use Qt Multimedia.
+
+To install manually instead of using a launcher:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e .
+.\.venv\Scripts\python -m sonicdna
+```
+
+On macOS or Linux, replace `.venv\Scripts\python` with `.venv/bin/python`.
 
 ## Run on Windows
 
@@ -102,6 +145,19 @@ from the comparison.
 
 The defaults are tuned as a general kick-drum profile. Use **Reset Defaults** in the popup to
 restore them. Accepted weights persist across application restarts.
+
+The preset selector includes four built-in starting points:
+
+- **Kick** emphasizes low-frequency body, pitch, and attack.
+- **Snare** emphasizes attack, timbre, brightness, noise character, and decay.
+- **Sub Bass** strongly emphasizes low-frequency body and sustained decay while reducing
+  brightness and noise influence.
+- **Hi-Hat** emphasizes brightness, attack, noise texture, and timbre while minimizing bass body.
+
+Choose a profile and click **Load** to place its values into the sliders. Use **Save Current As…**
+to store the current slider state under your own name. Custom presets persist across application
+restarts and can be loaded or deleted from the same popup. Built-in profiles cannot be overwritten
+or deleted.
 
 Weights are applied to standardized feature vectors during search. Changing them does not alter
 audio files or require re-indexing; run **Find Similar** again to apply the new ranking.
