@@ -6,3 +6,4 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+SonicDNA_project_specs.md

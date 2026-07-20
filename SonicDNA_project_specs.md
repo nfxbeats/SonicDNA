@@ -66,7 +66,7 @@ The system should prioritize perceptual similarity rather than filename similari
 - Copy file path
 - Open file with default application
 - Export results to CSV
-- User settings persistence
+- User settings persistence   
 - Basic error logging
 
 ### Excluded from Version 1
