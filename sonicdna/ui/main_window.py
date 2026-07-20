@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QThread, QTimer, Qt
+from PySide6.QtCore import QItemSelectionModel, QSettings, QThread, QTimer, Qt
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QDialog,
     QFileDialog,
     QGridLayout,
     QGroupBox,
@@ -31,6 +32,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
+    QSlider,
     QSpinBox,
     QTableWidgetItem,
     QVBoxLayout,
@@ -44,6 +47,8 @@ from sonicdna.platform_actions import open_file, reveal_file
 from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.ui.results_table import ResultsTable
+from sonicdna.ui.weights_dialog import WeightsDialog
+from sonicdna.weighting import DEFAULT_WEIGHTS, normalize_weights
 from sonicdna.workers import LibraryWorker
 
 
@@ -53,7 +58,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("SonicDNA")
-        self.setMinimumSize(900, 620)
+        self.setMinimumSize(760, 560)
+        self.resize(1024, 700)
         self.setAcceptDrops(True)
         self.settings = QSettings("SonicDNA", "SonicDNA")
         self.worker_thread: QThread | None = None
@@ -71,6 +77,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(root)
 
         library_group = QGroupBox("Sample Libraries")
+        library_group.setObjectName("library_group")
         library_layout = QGridLayout(library_group)
         self.folder_list = QListWidget()
         self.folder_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -93,12 +100,17 @@ class MainWindow(QMainWindow):
         self.status = QLabel(f"Index: {default_database_path()}")
         library_layout.addWidget(self.progress, 4, 0, 1, 2)
         library_layout.addWidget(self.status, 5, 0, 1, 2)
-        layout.addWidget(library_group)
-
         query_group = QGroupBox("Query Sample (or drop an audio file anywhere)")
-        query_layout = QHBoxLayout(query_group)
+        query_group.setObjectName("query_group")
+        query_layout = QVBoxLayout(query_group)
         self.query_label = QLabel("No query selected")
         self.query_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.query_label.setMinimumWidth(0)
+        self.query_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        query_layout.addWidget(self.query_label)
+        query_controls = QHBoxLayout()
         browse_button = QPushButton("Browse")
         browse_button.clicked.connect(self.browse_query)
         play_query = QPushButton("Play")
@@ -110,13 +122,14 @@ class MainWindow(QMainWindow):
         self.result_count = QSpinBox()
         self.result_count.setRange(1, 1000)
         self.result_count.setValue(25)
-        query_layout.addWidget(self.query_label, 1)
-        query_layout.addWidget(browse_button)
-        query_layout.addWidget(play_query)
-        query_layout.addWidget(stop_button)
-        query_layout.addWidget(QLabel("Results:"))
-        query_layout.addWidget(self.result_count)
-        query_layout.addWidget(self.find_button)
+        query_controls.addWidget(browse_button)
+        query_controls.addWidget(play_query)
+        query_controls.addWidget(stop_button)
+        query_controls.addStretch(1)
+        query_controls.addWidget(QLabel("Results:"))
+        query_controls.addWidget(self.result_count)
+        query_controls.addWidget(self.find_button)
+        query_layout.addLayout(query_controls)
         layout.addWidget(query_group)
 
         result_controls = QHBoxLayout()
@@ -128,19 +141,38 @@ class MainWindow(QMainWindow):
         export_button.clicked.connect(self.export_csv)
         self.auto_audition = QCheckBox("Auto-play selection")
         self.auto_audition.setChecked(True)
+        self.auto_audition.toggled.connect(self._save_auto_audition)
+        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider.setObjectName("preview_volume")
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setMaximumWidth(120)
+        self.volume_slider.setToolTip("Preview volume")
+        self.volume_slider.setValue(
+            round(float(self.settings.value("preview_volume", 0.8)) * 100)
+        )
+        self.volume_slider.valueChanged.connect(self._volume_changed)
+        weights_button = QPushButton("Similarity Weights…")
+        weights_button.clicked.connect(self.open_weights_dialog)
         result_controls.addWidget(play_result)
         result_controls.addWidget(stop_result)
         result_controls.addWidget(self.auto_audition)
+        result_controls.addWidget(QLabel("Volume:"))
+        result_controls.addWidget(self.volume_slider)
+        result_controls.addWidget(weights_button)
         result_controls.addStretch(1)
         result_controls.addWidget(export_button)
         layout.addLayout(result_controls)
 
-        self.results = ResultsTable(0, 5)
+        self.results = ResultsTable(0, 4)
+        self.results.setObjectName("results_table")
         self.results.setHorizontalHeaderLabels(
-            ["Rank", "Similarity", "State", "Filename", "Full path"]
+            ["Rank", "Similarity", "Filename", "Full path"]
         )
         self.results.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.results.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.results.setStyleSheet(
+            "QTableWidget::item:selected { background-color: #2563eb; color: white; }"
+        )
         self.results.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.results.setDragEnabled(True)
         self.results.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
@@ -154,14 +186,14 @@ class MainWindow(QMainWindow):
         self.results.horizontalHeader().setStretchLastSection(True)
         self.results.setColumnWidth(0, 60)
         self.results.setColumnWidth(1, 90)
-        self.results.setColumnWidth(2, 60)
-        self.results.setColumnWidth(3, 250)
+        self.results.setColumnWidth(2, 250)
         layout.addWidget(self.results, 1)
+        layout.addWidget(library_group)
         self.setCentralWidget(root)
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, activated=self.play_selected_result)
 
     def _build_audio(self) -> None:
-        volume = float(self.settings.value("preview_volume", 0.8))
+        volume = self.volume_slider.value() / 100.0
         self.player, self.playback_backend = create_audio_player(volume, self)
         self.player.playing_changed.connect(self._playback_state_changed)
 
@@ -192,7 +224,7 @@ class MainWindow(QMainWindow):
         ])
         self.settings.setValue("result_count", self.result_count.value())
         self.settings.setValue("auto_audition", self.auto_audition.isChecked())
-        self.settings.setValue("preview_volume", float(self.settings.value("preview_volume", 0.8)))
+        self.settings.setValue("preview_volume", self.volume_slider.value() / 100.0)
         self.stop_audio()
         self.player.close()
         self.cancel_work()
@@ -257,7 +289,12 @@ class MainWindow(QMainWindow):
         self.find_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.worker_thread = QThread(self)
-        self.worker = LibraryWorker(self.folders(), query, self.result_count.value())
+        self.worker = LibraryWorker(
+            self.folders(),
+            query,
+            self.result_count.value(),
+            weights=self.similarity_weights(),
+        )
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.run)
         self.worker.progress.connect(self._on_progress)
@@ -292,11 +329,10 @@ class MainWindow(QMainWindow):
         for row, result in enumerate(results):
             rank = QTableWidgetItem(str(row + 1))
             score = QTableWidgetItem(f"{result.similarity_score:.2f}")
-            state = QTableWidgetItem("")
             filename = QTableWidgetItem(result.path.name)
             full_path = QTableWidgetItem(str(result.path))
             full_path.setData(Qt.ItemDataRole.UserRole, str(result.path))
-            for column, item in enumerate((rank, score, state, filename, full_path)):
+            for column, item in enumerate((rank, score, filename, full_path)):
                 self.results.setItem(row, column, item)
         self.status.setText(f"Found {len(results)} similar sample(s).")
 
@@ -340,26 +376,39 @@ class MainWindow(QMainWindow):
     def play_selected_result(self) -> None:
         row = self.results.currentRow()
         if row >= 0:
-            item = self.results.item(row, 4)
+            item = self.results.item(row, 3)
             self.playing_row = row
             self.play_path(Path(item.data(Qt.ItemDataRole.UserRole)))
 
     def _result_selection_changed(
         self, current_row: int, _current_column: int, previous_row: int, _previous_column: int
     ) -> None:
+        if current_row >= 0:
+            QTimer.singleShot(0, self._ensure_current_row_selected)
         if current_row >= 0 and current_row != previous_row and self.auto_audition.isChecked():
             self.play_selected_result()
+
+    def _ensure_current_row_selected(self) -> None:
+        """Expand keyboard/current-cell changes to a visible full-row selection."""
+        row = self.results.currentRow()
+        if row < 0:
+            return
+        selected_columns = {
+            index.column() for index in self.results.selectedIndexes() if index.row() == row
+        }
+        if len(selected_columns) != self.results.columnCount():
+            self.results.selectionModel().select(
+                self.results.currentIndex(),
+                QItemSelectionModel.SelectionFlag.ClearAndSelect
+                | QItemSelectionModel.SelectionFlag.Rows,
+            )
 
     def stop_audio(self) -> None:
         self.player.stop()
 
     def _playback_state_changed(self, playing_now: bool) -> None:
         for row in range(self.results.rowCount()):
-            state_item = self.results.item(row, 2)
-            if state_item is None:
-                continue
             playing = row == self.playing_row and playing_now
-            state_item.setText("▶" if playing else "")
             brush = QBrush(QColor("#d8f3dc")) if playing else QBrush()
             for column in range(self.results.columnCount()):
                 item = self.results.item(row, column)
@@ -405,6 +454,34 @@ class MainWindow(QMainWindow):
 
     def _copy_text(self, text: str) -> None:
         QApplication.clipboard().setText(text)
+
+    def _save_auto_audition(self, checked: bool) -> None:
+        """Persist immediately so the preference survives abnormal shutdowns."""
+        self.settings.setValue("auto_audition", checked)
+        self.settings.sync()
+
+    def _volume_changed(self, value: int) -> None:
+        volume = value / 100.0
+        if hasattr(self, "player"):
+            self.player.set_volume(volume)
+        self.settings.setValue("preview_volume", volume)
+        self.settings.sync()
+
+    def similarity_weights(self) -> dict[str, float]:
+        values = {
+            key: float(self.settings.value(f"similarity_weights/{key}", default))
+            for key, default in DEFAULT_WEIGHTS.items()
+        }
+        return normalize_weights(values)
+
+    def open_weights_dialog(self) -> None:
+        dialog = WeightsDialog(self.similarity_weights(), self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        for key, value in dialog.values().items():
+            self.settings.setValue(f"similarity_weights/{key}", value)
+        self.settings.sync()
+        self.status.setText("Similarity weights updated; run Find Similar to apply them.")
 
     def export_csv(self) -> None:
         if not self.current_results:

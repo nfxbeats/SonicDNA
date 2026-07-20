@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sonicdna"
-version = "0.5.0"
+version = "0.6.1"
 description = "Local-first acoustic similarity search for audio samples"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -29,6 +29,7 @@ sonicdna-cli = "sonicdna.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sonicdna"]
+artifacts = ["sonicdna-logo.png", "sonicdna.ico"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

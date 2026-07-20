@@ -40,3 +40,30 @@ def test_incremental_scan_and_missing_cleanup(tmp_path: Path, monkeypatch) -> No
     assert calls == [sample]
     assert third.removed == 1
     assert remaining == []
+
+
+def test_decoder_specific_error_is_skipped(tmp_path: Path, monkeypatch) -> None:
+    class NoBackendError(Exception):
+        pass
+
+    library = tmp_path / "library"
+    library.mkdir()
+    bad = library / "bad.wav"
+    good = library / "good.wav"
+    bad.write_bytes(b"malformed")
+    good.write_bytes(b"valid")
+
+    def fake_extract(path: Path) -> np.ndarray:
+        if path == bad:
+            raise NoBackendError("no decoder accepted this file")
+        return np.ones(FEATURE_VECTOR_LENGTH, dtype=np.float32)
+
+    monkeypatch.setattr("sonicdna.indexing.extract_features", fake_extract)
+    with IndexDatabase(tmp_path / "index.db") as database:
+        folder_id, summary = update_index(database, library)
+        samples = database.samples_for_folder(folder_id)
+
+    assert summary.indexed == 1
+    assert len(summary.errors) == 1
+    assert "NoBackendError" in summary.errors[0]
+    assert [sample.path for sample in samples] == [good.resolve()]

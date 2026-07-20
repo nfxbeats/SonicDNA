@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QTableWidget
 class ResultsTable(QTableWidget):
     """Drag selected results into Explorer, Finder, or a compatible DAW."""
 
-    PATH_COLUMN = 4
+    PATH_COLUMN = 3
     selected_row_clicked_again = Signal()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802

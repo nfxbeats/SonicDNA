@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import Event
+from collections.abc import Mapping
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -29,6 +30,7 @@ class LibraryWorker(QObject):
         limit: int = 25,
         rebuild: bool = False,
         database_path: Path | None = None,
+        weights: Mapping[str, float] | None = None,
     ) -> None:
         super().__init__()
         self.folders = folders
@@ -36,6 +38,7 @@ class LibraryWorker(QObject):
         self.limit = limit
         self.rebuild = rebuild
         self.database_path = database_path or default_database_path()
+        self.weights = dict(weights or {})
         self._cancelled = Event()
 
     @Slot()
@@ -64,7 +67,7 @@ class LibraryWorker(QObject):
             if self.query is not None and not self._cancelled.is_set():
                 query_vector = extract_features(self.query)
                 results: list[SearchResult] = search_index(
-                    query_vector, self.query, samples, self.limit
+                    query_vector, self.query, samples, self.limit, self.weights
                 )
                 self.results_ready.emit(results)
         except Exception as exc:  # Worker boundary: present failures without crashing Qt.

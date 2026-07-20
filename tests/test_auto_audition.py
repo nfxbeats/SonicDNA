@@ -26,6 +26,11 @@ def test_selection_change_updates_playing_row(tmp_path: Path) -> None:
     assert window.playing_row == 0
     window.results.setCurrentCell(1, 0)
     assert window.playing_row == 1
+    application.processEvents()
+    selected_columns = {
+        index.column() for index in window.results.selectedIndexes() if index.row() == 1
+    }
+    assert selected_columns == set(range(window.results.columnCount()))
 
     window.close()
     application.processEvents()

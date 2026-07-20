@@ -51,7 +51,7 @@ def update_index(
             vector = extract_features(path)
             database.store_sample(folder_id, path, stat.st_mtime_ns, stat.st_size, vector)
             summary.indexed += 1
-        except (OSError, RuntimeError, ValueError) as exc:
+        except Exception as exc:  # Decoder libraries expose unrelated exception hierarchies.
             database.record_error(folder_id, path, exc)
             summary.errors.append(f"{path}: {type(exc).__name__}: {exc}")
         finally:

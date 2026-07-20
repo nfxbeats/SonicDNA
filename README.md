@@ -47,6 +47,7 @@ Pass a query and library path to either launcher to use CLI mode.
 - Query and result audio preview using Qt Multimedia; click, use Up/Down, double-click, press Space,
   or use Play Selected
 - Persistent Auto-play selection option for mouse and keyboard result navigation
+- Persistent preview-volume slider next to Auto-play selection
 - Clicking the already-selected result restarts it from the beginning
 - Low-latency `sounddevice` playback with resampling and 5 ms click-resistant transitions
 - Automatic Qt Multimedia fallback when PortAudio or an output device is unavailable
@@ -54,7 +55,12 @@ Pass a query and library path to either launcher to use CLI mode.
 - Drag one or more selected result files into compatible DAWs or the system file manager
 - Right-click actions to play, reveal, open, copy the full path, or copy the filename
 - CSV export of the current ranked results
+- Popup Similarity Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
+  Noise/Distortion, and Duration, with persisted kick defaults and Reset Defaults
 - Persistent folders, window geometry, result count, and preview volume
+
+The application uses `sonicdna-logo.png` as its runtime icon. The PNG is the cross-platform
+master asset; `sonicdna.ico` is its Windows packaging derivative.
 
 The first run can take several minutes while the scientific Python and Qt dependencies install.
 Audio files are read for analysis only; SonicDNA never modifies them.
