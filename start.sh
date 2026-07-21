@@ -12,4 +12,9 @@ if ! .venv/bin/python -c "import librosa, numpy, PySide6, scipy, sklearn, soundf
     .venv/bin/python -m pip install -e .
 fi
 
+if [ "${1:-}" = "--debug" ]; then
+    echo "Starting Warbeats SonicDNA in debug mode..."
+    exec .venv/bin/python -m sonicdna
+fi
+
 exec .venv/bin/python -m sonicdna "$@"

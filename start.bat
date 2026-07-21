@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
@@ -19,6 +19,17 @@ if errorlevel 1 (
     echo Installing SonicDNA and its dependencies...
     ".venv\Scripts\python.exe" -m pip install -e .
     if errorlevel 1 goto :error
+)
+
+if /I "%~1"=="--debug" (
+    echo Starting Warbeats SonicDNA in debug mode...
+    echo The application console will remain visible until you close this window.
+    ".venv\Scripts\python.exe" -m sonicdna
+    set "exit_code=!errorlevel!"
+    echo.
+    echo Warbeats SonicDNA exited with code !exit_code!.
+    pause
+    exit /b !exit_code!
 )
 
 if "%~1"=="" (

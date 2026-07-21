@@ -25,6 +25,28 @@ When `start.bat` is run without arguments, it launches the desktop application t
 `pythonw.exe` and immediately closes its CMD window. A command-line search with arguments remains
 attached to the terminal so scan progress, results, and errors stay visible.
 
+To launch the desktop interface with a persistent CMD window for debugging:
+
+```powershell
+.\start.bat --debug
+```
+
+Debug mode uses console Python, displays standard output and error messages while the GUI runs,
+and pauses after the application exits so the final traceback or exit code remains visible.
+
+Equivalent launcher commands are:
+
+```powershell
+.\start.ps1 --debug
+```
+
+```sh
+./start.sh --debug
+```
+
+In Windows CMD, include the `.bat` extension: `start.bat --debug`. The bare command `start` is a
+built-in Windows command and does not invoke SonicDNA's launcher.
+
 Alternatively, use the PowerShell launcher:
 
 ```powershell
@@ -109,6 +131,9 @@ sonicdna [--limit COUNT] [--database PATH] [--rebuild] QUERY LIBRARY
 | `--limit COUNT` | Return at most this many ranked matches. The default is `10`. SonicDNA still examines the complete indexed library before returning the top results. |
 | `--database PATH` | Use a custom SQLite index instead of the platform-default application-data location. |
 | `--rebuild` | Discard cached vectors for the selected library and extract every supported file again. |
+
+`--debug` is a Windows `start.bat` launcher mode rather than a SonicDNA CLI search argument. It
+opens the desktop interface with an attached CMD window.
 
 Windows example:
 
