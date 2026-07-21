@@ -31,6 +31,7 @@ def run() -> int:
     configure_windows_identity()
     application = QApplication(sys.argv)
     application.setApplicationName("SonicDNA")
+    application.setApplicationDisplayName("Warbeats SonicDNA")
     application.setOrganizationName("SonicDNA")
     icon = QIcon(str(application_icon_path()))
     application.setWindowIcon(icon)

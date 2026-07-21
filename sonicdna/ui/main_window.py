@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("SonicDNA")
+        self.setWindowTitle("Warbeats SonicDNA")
         self.setMinimumSize(760, 560)
         self.resize(1024, 700)
         self.setAcceptDrops(True)

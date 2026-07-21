@@ -10,7 +10,7 @@ from sonicdna.ui.main_window import MainWindow
 def test_main_window_launches() -> None:
     application = QApplication.instance() or QApplication([])
     window = MainWindow()
-    assert window.windowTitle() == "SonicDNA"
+    assert window.windowTitle() == "Warbeats SonicDNA"
     assert window.results.columnCount() == 4
     layout = window.centralWidget().layout()
     query = window.findChild(QGroupBox, "query_group")
