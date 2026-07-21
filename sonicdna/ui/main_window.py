@@ -6,12 +6,13 @@ import csv
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QSettings, QThread, QTimer, Qt
+from PySide6.QtCore import QItemSelectionModel, QSettings, QThread, QTimer, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QBrush,
     QCloseEvent,
     QColor,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -51,6 +52,8 @@ from sonicdna.ui.library_list import LibraryListWidget
 from sonicdna.ui.weights_dialog import WeightsDialog
 from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
 from sonicdna.workers import LibraryWorker
+
+REPOSITORY_URL = "https://github.com/nfxbeats/SonicDNA/tree/main#"
 
 
 class MainWindow(QMainWindow):
@@ -141,6 +144,9 @@ class MainWindow(QMainWindow):
         stop_result.clicked.connect(self.stop_audio)
         export_button = QPushButton("Export Results to CSV")
         export_button.clicked.connect(self.export_csv)
+        repository_button = QPushButton("GitHub Repository")
+        repository_button.setToolTip(REPOSITORY_URL)
+        repository_button.clicked.connect(self.open_repository)
         self.auto_audition = QCheckBox("Auto-play selection")
         self.auto_audition.setChecked(True)
         self.auto_audition.toggled.connect(self._save_auto_audition)
@@ -164,6 +170,7 @@ class MainWindow(QMainWindow):
         result_controls.addWidget(self.weights_button)
         result_controls.addStretch(1)
         result_controls.addWidget(export_button)
+        result_controls.addWidget(repository_button)
         layout.addLayout(result_controls)
 
         self.results = ResultsTable(0, 4)
@@ -560,3 +567,7 @@ class MainWindow(QMainWindow):
             self.status.setText(f"Exported {len(self.current_results)} results to {filename}")
         except OSError as exc:
             QMessageBox.warning(self, "SonicDNA", f"Could not export results:\n{exc}")
+
+    def open_repository(self) -> None:
+        if not QDesktopServices.openUrl(QUrl(REPOSITORY_URL)):
+            QMessageBox.warning(self, "Warbeats SonicDNA", "Could not open the repository URL.")
