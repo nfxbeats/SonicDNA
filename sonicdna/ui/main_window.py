@@ -6,7 +6,7 @@ import csv
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QSettings, QThread, QTimer, Qt, QUrl
+from PySide6.QtCore import QItemSelectionModel, QThread, QTimer, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -47,6 +47,7 @@ from sonicdna.indexing import ScanSummary
 from sonicdna.platform_actions import open_file, reveal_file
 from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
+from sonicdna.settings import create_settings
 from sonicdna.ui.results_table import ResultsTable
 from sonicdna.ui.library_list import LibraryListWidget
 from sonicdna.ui.weights_dialog import WeightsDialog
@@ -54,6 +55,7 @@ from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weigh
 from sonicdna.workers import LibraryWorker
 
 REPOSITORY_URL = "https://github.com/nfxbeats/SonicDNA/tree/main#"
+DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=KXJEA3SNE5PXC"
 
 
 class MainWindow(QMainWindow):
@@ -65,7 +67,7 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(760, 560)
         self.resize(1024, 700)
         self.setAcceptDrops(True)
-        self.settings = QSettings("SonicDNA", "SonicDNA")
+        self.settings = create_settings()
         self.worker_thread: QThread | None = None
         self.worker: LibraryWorker | None = None
         self.query_path: Path | None = None
@@ -147,6 +149,9 @@ class MainWindow(QMainWindow):
         repository_button = QPushButton("GitHub Repository")
         repository_button.setToolTip(REPOSITORY_URL)
         repository_button.clicked.connect(self.open_repository)
+        donate_button = QPushButton("Donate")
+        donate_button.setToolTip(DONATE_URL)
+        donate_button.clicked.connect(self.open_donate)
         self.auto_audition = QCheckBox("Auto-play selection")
         self.auto_audition.setChecked(True)
         self.auto_audition.toggled.connect(self._save_auto_audition)
@@ -170,6 +175,7 @@ class MainWindow(QMainWindow):
         result_controls.addWidget(self.weights_button)
         result_controls.addStretch(1)
         result_controls.addWidget(export_button)
+        result_controls.addWidget(donate_button)
         result_controls.addWidget(repository_button)
         layout.addLayout(result_controls)
 
@@ -569,5 +575,13 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "SonicDNA", f"Could not export results:\n{exc}")
 
     def open_repository(self) -> None:
-        if not QDesktopServices.openUrl(QUrl(REPOSITORY_URL)):
-            QMessageBox.warning(self, "Warbeats SonicDNA", "Could not open the repository URL.")
+        self._open_external_url(REPOSITORY_URL, "repository")
+
+    def open_donate(self) -> None:
+        self._open_external_url(DONATE_URL, "donation page")
+
+    def _open_external_url(self, url: str, description: str) -> None:
+        if not QDesktopServices.openUrl(QUrl(url)):
+            QMessageBox.warning(
+                self, "Warbeats SonicDNA", f"Could not open the {description}."
+            )
