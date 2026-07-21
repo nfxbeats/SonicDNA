@@ -21,6 +21,10 @@ On Windows:
 .\start.bat
 ```
 
+When `start.bat` is run without arguments, it launches the desktop application through
+`pythonw.exe` and immediately closes its CMD window. A command-line search with arguments remains
+attached to the terminal so scan progress, results, and errors stay visible.
+
 Alternatively, use the PowerShell launcher:
 
 ```powershell
@@ -81,6 +85,52 @@ chmod +x start.sh
 
 Pass a query and library path to either launcher to use CLI mode.
 
+## Command-line arguments
+
+Supplying a query file and library folder to a launcher runs SonicDNA in command-line mode instead
+of opening the desktop interface:
+
+```text
+sonicdna [--limit COUNT] [--database PATH] [--rebuild] QUERY LIBRARY
+```
+
+### Positional arguments
+
+| Argument | Description |
+| --- | --- |
+| `QUERY` | Path to the audio sample used as the similarity query. |
+| `LIBRARY` | Path to the library folder to scan recursively and search. |
+
+### Options
+
+| Option | Description |
+| --- | --- |
+| `-h`, `--help` | Display command-line help and exit. |
+| `--limit COUNT` | Return at most this many ranked matches. The default is `10`. SonicDNA still examines the complete indexed library before returning the top results. |
+| `--database PATH` | Use a custom SQLite index instead of the platform-default application-data location. |
+| `--rebuild` | Discard cached vectors for the selected library and extract every supported file again. |
+
+Windows example:
+
+```powershell
+.\start.bat "C:\Samples\query.wav" "D:\Drum Kits" --limit 25
+```
+
+PowerShell example with a custom index:
+
+```powershell
+.\start.ps1 "C:\Samples\query.wav" "D:\Drum Kits" --limit 50 --database "D:\Indexes\sonicdna.db"
+```
+
+macOS or Linux example:
+
+```sh
+./start.sh /samples/query.wav /samples/library --limit 25
+```
+
+Use `--rebuild` only when a complete re-extraction is needed. Normal searches already detect and
+process new or modified files while reusing unchanged feature vectors.
+
 ## Desktop features
 
 - Add and remove multiple recursively scanned library folders
@@ -107,6 +157,35 @@ master asset; `sonicdna.ico` is its Windows packaging derivative.
 
 The first run can take several minutes while the scientific Python and Qt dependencies install.
 Audio files are read for analysis only; SonicDNA never modifies them.
+
+## Data storage and privacy
+
+SonicDNA stores its persistent SQLite index outside the source-code directory in the current
+user's platform-specific application-data location:
+
+| Platform | Default index location |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\SonicDNA\index.db` |
+| macOS | `~/Library/Application Support/SonicDNA/index.db` |
+| Linux | `$XDG_DATA_HOME/SonicDNA/index.db`, or `~/.local/share/SonicDNA/index.db` when `XDG_DATA_HOME` is not set |
+
+The index contains library-folder and sample paths, file metadata, extracted acoustic feature
+vectors, and indexing-error records. It does not contain copies of the source audio.
+
+Interface preferences are stored separately through Qt's native settings system. These include
+window geometry, library-folder paths, similarity weights and custom presets, preview volume,
+result count, and auto-play selection:
+
+| Platform | Typical settings location |
+| --- | --- |
+| Windows | `HKEY_CURRENT_USER\Software\SonicDNA\SonicDNA` in the registry |
+| macOS | `~/Library/Preferences/com.SonicDNA.SonicDNA.plist` |
+| Linux | `$XDG_CONFIG_HOME/SonicDNA/SonicDNA.conf`, or `~/.config/SonicDNA/SonicDNA.conf` |
+
+These data and settings locations are outside the repository and are not included in version
+control, so another user receives an empty index and default settings. The exception is an
+intentional CLI override such as `--database path/to/index.db`; avoid placing that custom database
+inside the repository if it should remain private.
 
 ## Persistent index
 
@@ -158,6 +237,10 @@ Choose a profile and click **Load** to place its values into the sliders. Use **
 to store the current slider state under your own name. Custom presets persist across application
 restarts and can be loaded or deleted from the same popup. Built-in profiles cannot be overwritten
 or deleted.
+
+The active preset name appears both in the popup and on the main **Similarity Weights** button.
+Changing a slider adds `*` to the name (for example, `Snare*`) to indicate that the active values
+have been modified from that preset.
 
 Weights are applied to standardized feature vectors during search. Changing them does not alter
 audio files or require re-indexing; run **Find Similar** again to apply the new ranking.

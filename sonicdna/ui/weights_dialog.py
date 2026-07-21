@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -22,9 +22,9 @@ from PySide6.QtWidgets import (
 
 from sonicdna.weighting import (
     BUILTIN_PRESETS,
-    DEFAULT_WEIGHTS,
     WEIGHT_LABELS,
     normalize_weights,
+    weights_match,
 )
 
 
@@ -35,6 +35,7 @@ class WeightsDialog(QDialog):
         self,
         weights: Mapping[str, float],
         custom_presets: Mapping[str, Mapping[str, float]] | None = None,
+        active_preset: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -49,10 +50,20 @@ class WeightsDialog(QDialog):
         self.custom_presets = {
             name: normalize_weights(values) for name, values in (custom_presets or {}).items()
         }
+        initial_values = normalize_weights(weights)
+        available = {**BUILTIN_PRESETS, **self.custom_presets}
+        matching = next(
+            (name for name, values in available.items() if weights_match(initial_values, values)),
+            None,
+        )
+        self.base_preset = active_preset if active_preset in available else matching or "Kick"
+        self._loading_preset = False
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel("Preset:"))
         self.preset_combo = QComboBox()
         self.preset_combo.setObjectName("weight_preset")
+        self.preset_combo.setEditable(True)
+        self.preset_combo.lineEdit().setReadOnly(True)
         preset_row.addWidget(self.preset_combo, 1)
         load_button = QPushButton("Load")
         load_button.clicked.connect(self.load_selected_preset)
@@ -67,7 +78,7 @@ class WeightsDialog(QDialog):
         grid = QGridLayout()
         self.sliders: dict[str, QSlider] = {}
         self.value_labels: dict[str, QLabel] = {}
-        values = normalize_weights(weights)
+        values = initial_values
         for row, (key, label) in enumerate(WEIGHT_LABELS.items()):
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setObjectName(f"weight_{key}")
@@ -80,6 +91,7 @@ class WeightsDialog(QDialog):
             slider.valueChanged.connect(
                 lambda value, target=value_label: target.setText(f"{value / 100:.2f}")
             )
+            slider.valueChanged.connect(self._weights_changed)
             value_label.setText(f"{slider.value() / 100:.2f}")
             grid.addWidget(QLabel(label), row, 0)
             grid.addWidget(slider, row, 1)
@@ -97,38 +109,74 @@ class WeightsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
-        self._refresh_presets()
-        self.preset_combo.currentIndexChanged.connect(self._update_delete_button)
+        self._refresh_presets(self.base_preset)
+        self.preset_combo.currentIndexChanged.connect(self._preset_changed)
+        self._update_preset_display()
 
     def values(self) -> dict[str, float]:
         return {key: slider.value() / 100.0 for key, slider in self.sliders.items()}
 
     def reset_defaults(self) -> None:
-        for key, value in DEFAULT_WEIGHTS.items():
-            self.sliders[key].setValue(round(value * 100))
+        self.load_preset("Kick")
 
-    def _refresh_presets(self, selected: str = "Kick") -> None:
-        self.preset_combo.clear()
-        for name in BUILTIN_PRESETS:
-            self.preset_combo.addItem(f"{name} (Built-in)", name)
-        for name in sorted(self.custom_presets, key=str.casefold):
-            self.preset_combo.addItem(name, name)
-        index = self.preset_combo.findData(selected)
-        self.preset_combo.setCurrentIndex(max(0, index))
+    def _refresh_presets(self, selected: str) -> None:
+        with QSignalBlocker(self.preset_combo):
+            self.preset_combo.clear()
+            for name in BUILTIN_PRESETS:
+                self.preset_combo.addItem(name, name)
+            for name in sorted(self.custom_presets, key=str.casefold):
+                self.preset_combo.addItem(name, name)
+            index = self.preset_combo.findData(selected)
+            self.preset_combo.setCurrentIndex(max(0, index))
         self._update_delete_button()
+        self._update_preset_display()
+
+    def _preset_changed(self) -> None:
+        if self._loading_preset:
+            return
+        self._update_delete_button()
+        name = self.preset_combo.currentData()
+        if isinstance(name, str):
+            self.load_preset(name)
+
+    def _weights_changed(self) -> None:
+        if not self._loading_preset:
+            self._update_preset_display()
+
+    def _preset_values(self, name: str) -> Mapping[str, float] | None:
+        return BUILTIN_PRESETS.get(name) or self.custom_presets.get(name)
+
+    def is_modified(self) -> bool:
+        baseline = self._preset_values(self.base_preset)
+        return baseline is None or not weights_match(self.values(), baseline)
+
+    def _update_preset_display(self) -> None:
+        marker = "*" if self.is_modified() else ""
+        self.preset_combo.setEditText(f"{self.base_preset}{marker}")
 
     def _update_delete_button(self) -> None:
         self.delete_button.setEnabled(self.preset_combo.currentData() in self.custom_presets)
 
     def load_selected_preset(self) -> None:
-        self.load_preset(str(self.preset_combo.currentData()))
+        name = self.preset_combo.currentData()
+        if isinstance(name, str):
+            self.load_preset(name)
 
     def load_preset(self, name: str) -> None:
-        values = BUILTIN_PRESETS.get(name) or self.custom_presets.get(name)
+        values = self._preset_values(name)
         if values is None:
             raise KeyError(f"unknown weight preset: {name}")
-        for key, value in values.items():
-            self.sliders[key].setValue(round(value * 100))
+        self._loading_preset = True
+        try:
+            self.base_preset = name
+            with QSignalBlocker(self.preset_combo):
+                self.preset_combo.setCurrentIndex(self.preset_combo.findData(name))
+            for key, value in values.items():
+                self.sliders[key].setValue(round(value * 100))
+        finally:
+            self._loading_preset = False
+        self._update_delete_button()
+        self._update_preset_display()
 
     def save_current_as(self) -> None:
         name, accepted = QInputDialog.getText(self, "Save Weight Preset", "Preset name:")
@@ -145,6 +193,7 @@ class WeightsDialog(QDialog):
         if existing is not None and existing != name:
             del self.custom_presets[existing]
         self.custom_presets[name] = self.values()
+        self.base_preset = name
         self._refresh_presets(name)
         return True
 
@@ -152,7 +201,12 @@ class WeightsDialog(QDialog):
         name = str(self.preset_combo.currentData())
         if name in self.custom_presets:
             del self.custom_presets[name]
-            self._refresh_presets()
+            self.base_preset = "Kick"
+            self._refresh_presets("Kick")
+            self.load_preset("Kick")
 
     def saved_presets(self) -> dict[str, dict[str, float]]:
         return {name: dict(values) for name, values in self.custom_presets.items()}
+
+    def active_preset_name(self) -> str:
+        return self.base_preset

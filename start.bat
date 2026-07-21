@@ -21,6 +21,11 @@ if errorlevel 1 (
     if errorlevel 1 goto :error
 )
 
+if "%~1"=="" (
+    start "SonicDNA" ".venv\Scripts\pythonw.exe" -m sonicdna
+    exit /b 0
+)
+
 ".venv\Scripts\python.exe" -m sonicdna %*
 set "exit_code=%errorlevel%"
 if not "%exit_code%"=="0" pause

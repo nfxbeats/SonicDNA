@@ -82,6 +82,13 @@ def normalize_weights(weights: Mapping[str, float] | None = None) -> dict[str, f
     return normalized
 
 
+def weights_match(first: Mapping[str, float], second: Mapping[str, float]) -> bool:
+    """Return whether two slider states are equal at the UI's 0.01 precision."""
+    left = normalize_weights(first)
+    right = normalize_weights(second)
+    return all(round(left[key] * 100) == round(right[key] * 100) for key in DEFAULT_WEIGHTS)
+
+
 def feature_weight_vector(weights: Mapping[str, float] | None = None) -> np.ndarray:
     """Expand seven user weights into the deterministic 177-value feature layout."""
     normalized = normalize_weights(weights)

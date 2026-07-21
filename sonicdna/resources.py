@@ -17,3 +17,11 @@ def resource_path(filename: str) -> Path:
 def logo_path() -> Path:
     return resource_path("sonicdna-logo.png")
 
+
+def application_icon_path() -> Path:
+    """Prefer the native Windows icon and the PNG master elsewhere."""
+    if sys.platform == "win32":
+        windows_icon = resource_path("sonicdna.ico")
+        if windows_icon.is_file():
+            return windows_icon
+    return logo_path()

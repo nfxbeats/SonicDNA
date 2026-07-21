@@ -20,6 +20,13 @@ def test_builtin_profiles_load_and_custom_state_can_be_saved() -> None:
         dialog.load_preset(name)
         assert dialog.values() == expected
 
+    snare_index = dialog.preset_combo.findData("Snare")
+    dialog.preset_combo.setCurrentIndex(snare_index)
+    assert dialog.values() == BUILTIN_PRESETS["Snare"]
+    assert dialog.preset_combo.currentText() == "Snare"
+    dialog.sliders["attack"].setValue(11)
+    assert dialog.preset_combo.currentText() == "Snare*"
+
     dialog.sliders["attack"].setValue(12)
     assert dialog.save_named_preset("My Soft Hits")
     assert dialog.saved_presets()["My Soft Hits"]["attack"] == 0.12

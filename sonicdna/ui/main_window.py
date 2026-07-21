@@ -49,7 +49,7 @@ from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.ui.results_table import ResultsTable
 from sonicdna.ui.weights_dialog import WeightsDialog
-from sonicdna.weighting import DEFAULT_WEIGHTS, normalize_weights
+from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
 from sonicdna.workers import LibraryWorker
 
 
@@ -152,14 +152,15 @@ class MainWindow(QMainWindow):
             round(float(self.settings.value("preview_volume", 0.8)) * 100)
         )
         self.volume_slider.valueChanged.connect(self._volume_changed)
-        weights_button = QPushButton("Similarity Weights…")
-        weights_button.clicked.connect(self.open_weights_dialog)
+        self.weights_button = QPushButton()
+        self.weights_button.clicked.connect(self.open_weights_dialog)
+        self._update_weights_button()
         result_controls.addWidget(play_result)
         result_controls.addWidget(stop_result)
         result_controls.addWidget(self.auto_audition)
         result_controls.addWidget(QLabel("Volume:"))
         result_controls.addWidget(self.volume_slider)
-        result_controls.addWidget(weights_button)
+        result_controls.addWidget(self.weights_button)
         result_controls.addStretch(1)
         result_controls.addWidget(export_button)
         layout.addLayout(result_controls)
@@ -477,7 +478,10 @@ class MainWindow(QMainWindow):
 
     def open_weights_dialog(self) -> None:
         dialog = WeightsDialog(
-            self.similarity_weights(), self.custom_weight_presets(), parent=self
+            self.similarity_weights(),
+            self.custom_weight_presets(),
+            active_preset=self.active_weight_preset(),
+            parent=self,
         )
         result = dialog.exec()
         self.settings.setValue(
@@ -486,10 +490,13 @@ class MainWindow(QMainWindow):
         )
         self.settings.sync()
         if result != QDialog.DialogCode.Accepted:
+            self._update_weights_button()
             return
         for key, value in dialog.values().items():
             self.settings.setValue(f"similarity_weights/{key}", value)
+        self.settings.setValue("similarity_weight_active_preset", dialog.active_preset_name())
         self.settings.sync()
+        self._update_weights_button()
         self.status.setText("Similarity weights updated; run Find Similar to apply them.")
 
     def custom_weight_presets(self) -> dict[str, dict[str, float]]:
@@ -505,6 +512,24 @@ class MainWindow(QMainWindow):
             for name, weights in values.items()
             if isinstance(weights, dict)
         }
+
+    def active_weight_preset(self) -> str:
+        available = {**BUILTIN_PRESETS, **self.custom_weight_presets()}
+        saved = str(self.settings.value("similarity_weight_active_preset", ""))
+        if saved in available:
+            return saved
+        current = self.similarity_weights()
+        return next(
+            (name for name, values in available.items() if weights_match(current, values)),
+            "Kick",
+        )
+
+    def _update_weights_button(self) -> None:
+        name = self.active_weight_preset()
+        available = {**BUILTIN_PRESETS, **self.custom_weight_presets()}
+        baseline = available.get(name, BUILTIN_PRESETS["Kick"])
+        marker = "*" if not weights_match(self.similarity_weights(), baseline) else ""
+        self.weights_button.setText(f"Similarity Weights: {name}{marker}…")
 
     def export_csv(self) -> None:
         if not self.current_results:
