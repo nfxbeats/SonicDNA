@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
     QMainWindow,
     QMessageBox,
     QMenu,
@@ -48,6 +47,7 @@ from sonicdna.platform_actions import open_file, reveal_file
 from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.ui.results_table import ResultsTable
+from sonicdna.ui.library_list import LibraryListWidget
 from sonicdna.ui.weights_dialog import WeightsDialog
 from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
 from sonicdna.workers import LibraryWorker
@@ -80,8 +80,9 @@ class MainWindow(QMainWindow):
         library_group = QGroupBox("Sample Libraries")
         library_group.setObjectName("library_group")
         library_layout = QGridLayout(library_group)
-        self.folder_list = QListWidget()
+        self.folder_list = LibraryListWidget()
         self.folder_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.folder_list.folders_dropped.connect(self.add_library_paths)
         library_layout.addWidget(self.folder_list, 0, 0, 4, 1)
         add_button = QPushButton("Add Folder")
         add_button.clicked.connect(self.add_folder)
@@ -237,8 +238,16 @@ class MainWindow(QMainWindow):
 
     def add_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Add Sample Library")
-        if folder and folder not in [str(path) for path in self.folders()]:
-            self.folder_list.addItem(folder)
+        if folder:
+            self.add_library_paths([Path(folder)])
+
+    def add_library_paths(self, paths: list[Path]) -> None:
+        existing = {path.resolve() for path in self.folders()}
+        for path in paths:
+            resolved = path.resolve()
+            if resolved.is_dir() and resolved not in existing:
+                self.folder_list.addItem(str(resolved))
+                existing.add(resolved)
 
     def remove_folders(self) -> None:
         for item in self.folder_list.selectedItems():

@@ -134,6 +134,7 @@ process new or modified files while reusing unchanged feature vectors.
 ## Desktop features
 
 - Add and remove multiple recursively scanned library folders
+- Drag one or more folders from the operating-system file manager into the Sample Libraries list
 - Incremental background indexing with progress and cancellation
 - Browse for or drag-and-drop a query sample
 - Ranked similarity results with relative scores from 0 to 100
