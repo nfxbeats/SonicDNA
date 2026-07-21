@@ -177,7 +177,7 @@ process new or modified files while reusing unchanged feature vectors.
 - Right-click actions to play, reveal, open, copy the full path, or copy the filename
 - CSV export of the current ranked results
 - Popup Similarity Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
-  Noise/Distortion, and Duration, with persisted kick defaults and Reset Defaults
+  Noise/Distortion, and Duration, with the persisted Closest default and Reset Defaults
 - Persistent folders, window geometry, result count, and preview volume
 
 The application uses `sonicdna-logo.png` as its runtime icon. The PNG is the cross-platform
