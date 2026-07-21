@@ -9,16 +9,20 @@ if not exist ".venv\Scripts\python.exe" (
         pause
         exit /b 1
     )
-    echo Creating SonicDNA virtual environment...
+    echo [1/3] Creating SonicDNA virtual environment with Python 3...
+    py -3 --version
     py -3 -m venv .venv
     if errorlevel 1 goto :error
+    echo [1/3] Virtual environment created at %CD%\.venv
 )
 
 ".venv\Scripts\python.exe" -c "import librosa, numpy, PySide6, scipy, sklearn, soundfile" >nul 2>nul
 if errorlevel 1 (
-    echo Installing SonicDNA and its dependencies...
-    ".venv\Scripts\python.exe" -m pip install -e .
+    echo [2/3] Installing SonicDNA and its dependencies. This can take several minutes...
+    ".venv\Scripts\python.exe" -m pip install --verbose --progress-bar on -e .
     if errorlevel 1 goto :error
+    echo [2/3] Dependency installation completed.
+    echo [3/3] Setup complete. Starting Warbeats SonicDNA...
 )
 
 if /I "%~1"=="--debug" (

@@ -14,6 +14,8 @@ includes a graphical interface, command-line search, and a persistent incrementa
 Download or clone the project, then open a terminal in the SonicDNA directory. The supplied
 launcher creates an isolated `.venv` virtual environment and installs SonicDNA and its Python
 dependencies automatically on the first run. The initial installation can take several minutes.
+The launchers display numbered setup stages, the selected Python version, dependency-check status,
+and verbose pip download/build progress during installation.
 
 On Windows:
 
