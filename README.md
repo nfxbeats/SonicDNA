@@ -242,19 +242,20 @@ from the comparison.
 
 | Weight | Default | Purpose |
 | --- | ---: | --- |
-| Body / Pitch | `0.90` | Prioritizes the dominant low-frequency peak and relative energy across bass and frequency bands. This is especially important for matching kicks with a similar fundamental body. |
-| Attack | `0.85` | Compares how quickly the transient reaches its peak and the balance between the initial transient and the body. Increase it to favor similarly sharp or soft hits. |
-| Decay | `0.70` | Compares how quickly the sound falls from its peak toward 50%, 20%, and 5% amplitude. Increase it to distinguish short, tight hits from longer tails. |
-| Brightness | `0.50` | Uses spectral centroid, bandwidth, and rolloff to compare dark and bright samples. |
-| Timbre | `0.70` | Compares MFCCs, mel-spectrum shape, and energy statistics. This captures the broader tone and spectral character of a sample. |
-| Noise / Distortion | `0.45` | Uses spectral flatness and zero-crossing behavior to compare clean, noisy, distorted, or textured sounds. |
-| Duration | `0.40` | Compares total analyzed sample length. Increase it when similarly timed one-shots are important. |
+| Body / Pitch | `1.00` | Prioritizes the dominant low-frequency peak and relative energy across bass and frequency bands. This is especially important for matching kicks with a similar fundamental body. |
+| Attack | `1.00` | Compares how quickly the transient reaches its peak and the balance between the initial transient and the body. Increase it to favor similarly sharp or soft hits. |
+| Decay | `1.00` | Compares how quickly the sound falls from its peak toward 50%, 20%, and 5% amplitude. Increase it to distinguish short, tight hits from longer tails. |
+| Brightness | `1.00` | Uses spectral centroid, bandwidth, and rolloff to compare dark and bright samples. |
+| Timbre | `1.00` | Compares MFCCs, mel-spectrum shape, and energy statistics. This captures the broader tone and spectral character of a sample. |
+| Noise / Distortion | `1.00` | Uses spectral flatness and zero-crossing behavior to compare clean, noisy, distorted, or textured sounds. |
+| Duration | `1.00` | Compares total analyzed sample length. Increase it when similarly timed one-shots are important. |
 
-The defaults are tuned as a general kick-drum profile. Use **Reset Defaults** in the popup to
-restore them. Accepted weights persist across application restarts.
+The default **Closest** profile gives every characteristic equal maximum weight. Use **Reset
+Defaults** in the popup to restore it. Accepted weights persist across application restarts.
 
-The preset selector includes four built-in starting points:
+The preset selector includes five built-in starting points:
 
+- **Closest** sets every weight to `1.00` and is the default for unconfigured searches.
 - **Kick** emphasizes low-frequency body, pitch, and attack.
 - **Snare** emphasizes attack, timbre, brightness, noise character, and decay.
 - **Sub Bass** strongly emphasizes low-frequency body and sustained decay while reducing

@@ -9,17 +9,26 @@ import numpy as np
 from sonicdna.feature_schema import FEATURE_SCHEMA, FEATURE_VECTOR_LENGTH
 
 DEFAULT_WEIGHTS: dict[str, float] = {
-    "body_pitch": 0.90,
-    "attack": 0.85,
-    "decay": 0.70,
-    "brightness": 0.50,
-    "timbre": 0.70,
-    "noise": 0.45,
-    "duration": 0.40,
+    "body_pitch": 1.00,
+    "attack": 1.00,
+    "decay": 1.00,
+    "brightness": 1.00,
+    "timbre": 1.00,
+    "noise": 1.00,
+    "duration": 1.00,
 }
 
 BUILTIN_PRESETS: dict[str, dict[str, float]] = {
-    "Kick": dict(DEFAULT_WEIGHTS),
+    "Closest": dict(DEFAULT_WEIGHTS),
+    "Kick": {
+        "body_pitch": 0.90,
+        "attack": 0.85,
+        "decay": 0.70,
+        "brightness": 0.50,
+        "timbre": 0.70,
+        "noise": 0.45,
+        "duration": 0.40,
+    },
     "Snare": {
         "body_pitch": 0.45,
         "attack": 0.90,

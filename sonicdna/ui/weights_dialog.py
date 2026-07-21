@@ -56,7 +56,7 @@ class WeightsDialog(QDialog):
             (name for name, values in available.items() if weights_match(initial_values, values)),
             None,
         )
-        self.base_preset = active_preset if active_preset in available else matching or "Kick"
+        self.base_preset = active_preset if active_preset in available else matching or "Closest"
         self._loading_preset = False
         preset_row = QHBoxLayout()
         preset_row.addWidget(QLabel("Preset:"))
@@ -117,7 +117,7 @@ class WeightsDialog(QDialog):
         return {key: slider.value() / 100.0 for key, slider in self.sliders.items()}
 
     def reset_defaults(self) -> None:
-        self.load_preset("Kick")
+        self.load_preset("Closest")
 
     def _refresh_presets(self, selected: str) -> None:
         with QSignalBlocker(self.preset_combo):
@@ -201,9 +201,9 @@ class WeightsDialog(QDialog):
         name = str(self.preset_combo.currentData())
         if name in self.custom_presets:
             del self.custom_presets[name]
-            self.base_preset = "Kick"
-            self._refresh_presets("Kick")
-            self.load_preset("Kick")
+            self.base_preset = "Closest"
+            self._refresh_presets("Closest")
+            self.load_preset("Closest")
 
     def saved_presets(self) -> dict[str, dict[str, float]]:
         return {name: dict(values) for name, values in self.custom_presets.items()}

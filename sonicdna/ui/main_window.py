@@ -543,13 +543,13 @@ class MainWindow(QMainWindow):
         current = self.similarity_weights()
         return next(
             (name for name, values in available.items() if weights_match(current, values)),
-            "Kick",
+            "Closest",
         )
 
     def _update_weights_button(self) -> None:
         name = self.active_weight_preset()
         available = {**BUILTIN_PRESETS, **self.custom_weight_presets()}
-        baseline = available.get(name, BUILTIN_PRESETS["Kick"])
+        baseline = available.get(name, BUILTIN_PRESETS["Closest"])
         marker = "*" if not weights_match(self.similarity_weights(), baseline) else ""
         self.weights_button.setText(f"Similarity Weights: {name}{marker}…")
 
