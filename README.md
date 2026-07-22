@@ -3,6 +3,9 @@
 SonicDNA is a local-first themeable desktop application for finding acoustically similar audio samples. It
 includes a graphical interface, command-line search, and a persistent incremental index.
 
+For an exact description of preprocessing, the 177-value fingerprint, weighting, scoring, and
+ranking, see [Audio Processing and Matching](AUDIO_MATCHING.md).
+
 [Demo video and Windows installation walkthrough](https://www.youtube.com/watch?v=VqTKthb3nFE)
 
 ![image](SonicDNA-ScreenShot.png) 
