@@ -5,7 +5,7 @@ includes a graphical interface, command-line search, and a persistent incrementa
 
 [Demo video and Windows installation walkthrough](https://www.youtube.com/watch?v=VqTKthb3nFE)
 
-![image](.\SonicDNA-ScreenShot.png)
+![image](SonicDNA-ScreenShot.png) 
 
 ## Installation
 
