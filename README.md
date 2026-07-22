@@ -1,9 +1,11 @@
 # SonicDNA
 
-SonicDNA is a local-first desktop application for finding acoustically similar audio samples. It
+SonicDNA is a local-first themeable desktop application for finding acoustically similar audio samples. It
 includes a graphical interface, command-line search, and a persistent incremental index.
 
 [Demo video and Windows installation walkthrough](https://www.youtube.com/watch?v=VqTKthb3nFE)
+
+![image](.\SonicDNA-ScreenShot.png)
 
 ## Installation
 
