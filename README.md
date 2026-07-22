@@ -14,7 +14,7 @@ ranking, see [Audio Processing and Matching](AUDIO_MATCHING.md).
 
 ### Requirements
 
-- Python 3.12 or newer
+- [Python 3.12 or newer](https://www.python.org/downloads/)
 - Windows 10/11, a current macOS release, or a modern Linux desktop
 - An available audio-output device for sample preview
 
