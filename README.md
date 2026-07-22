@@ -93,7 +93,8 @@ its first run:
 
 With no arguments, the launcher opens the SonicDNA desktop interface. Add one or more library
 folders, choose or drop a query sample, and click **Find Similar**. Scanning and feature extraction
-run in a background thread and can be cancelled safely.
+run in a background thread and can be cancelled safely. Completed searches report both the number
+of indexed files compared and the elapsed query-and-ranking time.
 
 The original command-line workflow remains available by supplying arguments:
 
@@ -183,14 +184,18 @@ process new or modified files while reusing unchanged feature vectors.
 - Clicking the already-selected result restarts it from the beginning
 - Low-latency `sounddevice` playback with resampling and 5 ms click-resistant transitions
 - Automatic Qt Multimedia fallback when PortAudio or an output device is unavailable
-- A playing-row indicator and a combined Play/Stop button that follows playback state
+- A moving vertical playhead over the query or result waveform during playback
+- A combined Play/Stop button that follows playback state
+- An unlabeled result-grid column that marks the current selection with a play glyph
+- Selection without text-color or row-background changes, leaving the play glyph as the marker
 - Drag one or more selected result files into compatible DAWs or the system file manager
 - Right-click actions to play, reveal, open, copy the full path, or copy the filename
 - CSV export of the current ranked results
 - Popup Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
   Noise/Distortion, and Duration, with the persisted Closest default and Reset Defaults
 - Persistent folders, window geometry, result count, and preview volume
-- File-backed System, Dark, and user-created themes with persisted selection
+- File-backed System, Dark, Autumn, Cyber, Pastel, Dark Gray, Warbeats, and user-created themes with persisted selection;
+  Cyber is the first-run default
 
 The application uses `sonicdna-logo.png` as its runtime icon. The PNG is the cross-platform
 master asset; `sonicdna.ico` is its Windows packaging derivative.
@@ -281,6 +286,10 @@ ThemedIconButton {
 The Find Similar button is styled entirely by the active theme. A custom theme can define its
 normal and interaction colors with the `QPushButton#find_similar`, `:hover`, `:pressed`, and
 `:disabled` selectors. See any bundled theme for a complete example.
+
+The Auto-play indicator also exposes `checkboxBackground`, `checkboxBorder`, `checkboxChecked`,
+and `checkboxCheck` color properties on `ThemedCheckBox`. The bundled themes keep both its checked
+and unchecked states visible; their QSS blocks can be copied into custom themes.
 
 ## Persistent index
 

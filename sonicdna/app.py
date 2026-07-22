@@ -36,7 +36,7 @@ def run() -> int:
     application.setApplicationDisplayName("Warbeats SonicDNA")
     application.setOrganizationName("SonicDNA")
     settings = create_settings()
-    selected_theme = str(settings.value("theme", "System"))
+    selected_theme = str(settings.value("theme", "Cyber"))
     resolved_theme = apply_theme(selected_theme)
     if resolved_theme != selected_theme:
         settings.setValue("theme", resolved_theme)

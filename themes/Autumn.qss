@@ -95,6 +95,12 @@ CompactWaveformWidget, ResultsTable {
 ThemedIconButton {
     qproperty-iconColor: #ffcc80;
 }
+ThemedCheckBox {
+    qproperty-checkboxBackground: #281d15;
+    qproperty-checkboxBorder: #e59b54;
+    qproperty-checkboxChecked: #d97706;
+    qproperty-checkboxCheck: #fff7ed;
+}
 QPushButton#find_similar {
     background-color: #c2410c;
     color: #fff7ed;

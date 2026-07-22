@@ -10,10 +10,10 @@ def test_drag_contains_local_file_url(tmp_path: Path) -> None:
     application = QApplication.instance() or QApplication([])
     sample = tmp_path / "kick drum.wav"
     sample.write_bytes(b"audio")
-    table = ResultsTable(1, 4)
+    table = ResultsTable(1, 5)
     path_item = QTableWidgetItem(str(sample))
     path_item.setData(Qt.ItemDataRole.UserRole, str(sample))
-    table.setItem(0, 3, path_item)
+    table.setItem(0, 4, path_item)
     table.selectRow(0)
 
     urls = table.mime_data_for_selection().urls()

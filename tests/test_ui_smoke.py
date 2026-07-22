@@ -3,18 +3,26 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QGroupBox, QPushButton
+from PySide6.QtWidgets import QApplication, QGroupBox, QPushButton, QStyle, QStyleOptionViewItem
 
 from sonicdna.ui.main_window import DONATE_URL, MainWindow, REPOSITORY_URL
+from sonicdna.ui.play_indicator_delegate import (
+    PlayIndicatorDelegate,
+    UnhighlightedItemDelegate,
+    without_selection,
+)
 
 
 def test_main_window_launches() -> None:
     application = QApplication.instance() or QApplication([])
     window = MainWindow()
     assert window.windowTitle() == "Warbeats SonicDNA"
-    assert window.results.columnCount() == 4
+    assert window.results.columnCount() == 5
+    assert window.results.horizontalHeaderItem(0).text() == ""
+    assert isinstance(window.results.itemDelegate(), UnhighlightedItemDelegate)
+    assert isinstance(window.results.itemDelegateForColumn(0), PlayIndicatorDelegate)
     assert window.results.verticalHeader().isHidden()
-    assert window.results.horizontalHeader().sortIndicatorSection() == 0
+    assert window.results.horizontalHeader().sortIndicatorSection() == 1
     assert (
         window.results.horizontalHeader().sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
     )
@@ -35,7 +43,8 @@ def test_main_window_launches() -> None:
     assert layout.indexOf(query) < layout.indexOf(window.results) < layout.indexOf(library)
     assert REPOSITORY_URL == "https://github.com/nfxbeats/SonicDNA/tree/main#"
     assert DONATE_URL == "https://www.paypal.com/donate/?hosted_button_id=KXJEA3SNE5PXC"
-    assert window.theme_combo.currentData() == "System"
+    assert window.theme_combo.currentData() == "Cyber"
+    assert "drop-down { width: 16px" in window.theme_combo.styleSheet()
     window.move(-500, -300)
     window._ensure_window_position_visible()
     assert window.x() >= 0
@@ -46,3 +55,11 @@ def test_main_window_launches() -> None:
     assert available.contains(window.pos())
     window.close()
     application.processEvents()
+
+
+def test_result_delegate_removes_selection_and_focus_states() -> None:
+    option = QStyleOptionViewItem()
+    option.state |= QStyle.StateFlag.State_Selected | QStyle.StateFlag.State_HasFocus
+    clean = without_selection(option)
+    assert not clean.state & QStyle.StateFlag.State_Selected
+    assert not clean.state & QStyle.StateFlag.State_HasFocus

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import QStyledItemDelegate, QStyleOptionViewItem
 
 WAVEFORM_ROLE = Qt.ItemDataRole.UserRole + 1
+PLAYBACK_PROGRESS_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class WaveformDelegate(QStyledItemDelegate):
@@ -14,6 +15,7 @@ class WaveformDelegate(QStyledItemDelegate):
 
     def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:
         painter.save()
+        painter.fillRect(option.rect, option.palette.brush(QPalette.ColorRole.Base))
         rect = QRectF(option.rect.adjusted(3, 3, -3, -3))
         painter.setPen(Qt.PenStyle.NoPen)
         widget = self.parent() or option.widget
@@ -46,6 +48,14 @@ class WaveformDelegate(QStyledItemDelegate):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
             painter.setPen(QPen(waveform, 1.0))
             painter.drawPath(path)
+
+        playback_progress = index.data(PLAYBACK_PROGRESS_ROLE)
+        if playback_progress is not None:
+            playhead_x = rect.left() + rect.width() * float(playback_progress)
+            painter.setPen(QPen(text, 2.0))
+            painter.drawLine(
+                QPointF(playhead_x, rect.top()), QPointF(playhead_x, rect.bottom())
+            )
 
         text_rect = rect.adjusted(4, 2, -4, -2)
         painter.setPen(text)

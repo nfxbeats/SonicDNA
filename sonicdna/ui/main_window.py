@@ -18,9 +18,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QAction,
-    QBrush,
     QCloseEvent,
-    QColor,
     QDesktopServices,
     QKeySequence,
     QShortcut,
@@ -28,7 +26,6 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -57,12 +54,18 @@ from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.settings import create_settings
 from sonicdna.ui.results_table import NumericTableWidgetItem, ResultsTable
+from sonicdna.ui.play_indicator_delegate import PlayIndicatorDelegate, UnhighlightedItemDelegate
 from sonicdna.ui.themed_icon_button import ThemedIconButton
+from sonicdna.ui.themed_checkbox import ThemedCheckBox
 from sonicdna.ui.library_list import LibraryListWidget
 from sonicdna.ui.compact_waveform import CompactWaveformWidget
 from sonicdna.ui.query_drop_group import QueryDropGroupBox
 from sonicdna.ui.weights_dialog import WeightsDialog
-from sonicdna.ui.waveform_delegate import WAVEFORM_ROLE, WaveformDelegate
+from sonicdna.ui.waveform_delegate import (
+    PLAYBACK_PROGRESS_ROLE,
+    WAVEFORM_ROLE,
+    WaveformDelegate,
+)
 from sonicdna.ui.waveform_loader import WaveformTask
 from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
 from sonicdna.themes import apply_theme, available_themes, theme_directory
@@ -176,6 +179,11 @@ class MainWindow(QMainWindow):
         self.theme_combo = QComboBox()
         self.theme_combo.setObjectName("theme_selector")
         self.theme_combo.setMinimumWidth(120)
+        self.theme_combo.setStyleSheet(
+            "QComboBox#theme_selector { padding-right: 18px; }"
+            "QComboBox#theme_selector::drop-down { width: 16px; border: 0; }"
+            "QComboBox#theme_selector::down-arrow { width: 8px; height: 8px; }"
+        )
         self._populate_theme_combo()
         self.theme_combo.currentIndexChanged.connect(self._theme_combo_changed)
         export_button = QPushButton("Export")
@@ -186,7 +194,7 @@ class MainWindow(QMainWindow):
         donate_button = QPushButton("Donate")
         donate_button.setToolTip(DONATE_URL)
         donate_button.clicked.connect(self.open_donate)
-        self.auto_audition = QCheckBox("Auto-play")
+        self.auto_audition = ThemedCheckBox("Auto-play")
         self.auto_audition.setChecked(True)
         self.auto_audition.toggled.connect(self._save_auto_audition)
         self.volume_slider = QSlider(Qt.Orientation.Horizontal)
@@ -215,34 +223,35 @@ class MainWindow(QMainWindow):
         result_controls.addWidget(repository_button)
         layout.addLayout(result_controls)
 
-        self.results = ResultsTable(0, 4)
+        self.results = ResultsTable(0, 5)
         self.results.setObjectName("results_table")
         self.results.setHorizontalHeaderLabels(
-            ["Rank", "Similarity", "Sample", "Full path"]
+            ["", "Rank", "Similarity", "Sample", "Full path"]
         )
         self.results.verticalHeader().setVisible(False)
         self.results.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.results.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.results.setStyleSheet(
-            "QTableWidget::item:selected { background-color: #2563eb; color: white; }"
-        )
+        self.results.setStyleSheet("ResultsTable { outline: 0; }")
         self.results.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.results.setDragEnabled(True)
         self.results.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.results.setDefaultDropAction(Qt.DropAction.CopyAction)
         self.results.setSortingEnabled(False)
-        self.results.horizontalHeader().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        self.results.horizontalHeader().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.results.doubleClicked.connect(self.play_selected_result)
         self.results.currentCellChanged.connect(self._result_selection_changed)
         self.results.selected_row_clicked_again.connect(self.play_selected_result)
         self.results.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.results.customContextMenuRequested.connect(self.show_result_menu)
         self.results.horizontalHeader().setStretchLastSection(True)
-        self.results.setColumnWidth(0, 60)
-        self.results.setColumnWidth(1, 90)
-        self.results.setColumnWidth(2, 250)
+        self.results.setColumnWidth(0, 30)
+        self.results.setColumnWidth(1, 60)
+        self.results.setColumnWidth(2, 90)
+        self.results.setColumnWidth(3, 250)
         self.results.verticalHeader().setDefaultSectionSize(46)
-        self.results.setItemDelegateForColumn(2, WaveformDelegate(self.results))
+        self.results.setItemDelegate(UnhighlightedItemDelegate(self.results))
+        self.results.setItemDelegateForColumn(0, PlayIndicatorDelegate(self.results))
+        self.results.setItemDelegateForColumn(3, WaveformDelegate(self.results))
         self.results.verticalScrollBar().valueChanged.connect(self._schedule_visible_waveforms)
         self.results.horizontalHeader().sortIndicatorChanged.connect(
             self._results_sort_changed
@@ -253,7 +262,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, activated=self.play_selected_result)
 
     def _populate_theme_combo(self) -> None:
-        selected = str(self.settings.value("theme", "System"))
+        selected = str(self.settings.value("theme", "Cyber"))
         themes = available_themes()
         if selected not in themes:
             selected = "System"
@@ -292,6 +301,7 @@ class MainWindow(QMainWindow):
         volume = self.volume_slider.value() / 100.0
         self.player, self.playback_backend = create_audio_player(volume, self)
         self.player.playing_changed.connect(self._playback_state_changed)
+        self.player.progress_changed.connect(self._playback_progress_changed)
 
     def _restore_settings(self) -> None:
         geometry = self.settings.value("window_geometry")
@@ -446,13 +456,18 @@ class MainWindow(QMainWindow):
             f"{summary.unchanged} unchanged, {len(summary.errors)} skipped"
         )
 
-    def _show_results(self, results: list[SearchResult]) -> None:
+    def _show_results(
+        self,
+        results: list[SearchResult],
+        searched_files: int | None = None,
+        elapsed_seconds: float | None = None,
+    ) -> None:
         self.current_results = results
         self.playing_row = -1
         self.playing_path = None
         self._waveform_pending.clear()
         self.results.setSortingEnabled(False)
-        self.results.horizontalHeader().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        self.results.horizontalHeader().setSortIndicator(1, Qt.SortOrder.AscendingOrder)
         self.results.setRowCount(len(results))
         for row, result in enumerate(results):
             rank = NumericTableWidgetItem(str(row + 1), row + 1)
@@ -462,11 +477,15 @@ class MainWindow(QMainWindow):
             filename = QTableWidgetItem(result.path.name)
             full_path = QTableWidgetItem(str(result.path))
             full_path.setData(Qt.ItemDataRole.UserRole, str(result.path))
-            for column, item in enumerate((rank, score, filename, full_path)):
+            indicator = NumericTableWidgetItem("", row + 1)
+            for column, item in enumerate((indicator, rank, score, filename, full_path)):
                 self.results.setItem(row, column, item)
         self.results.setSortingEnabled(True)
-        self.results.sortItems(0, Qt.SortOrder.AscendingOrder)
-        self.status.setText(f"Found {len(results)} similar sample(s).")
+        self.results.sortItems(1, Qt.SortOrder.AscendingOrder)
+        status = f"Found {len(results)} similar sample(s)."
+        if searched_files is not None and elapsed_seconds is not None:
+            status += f" Searched {searched_files} files in {elapsed_seconds:.2f} seconds."
+        self.status.setText(status)
         QTimer.singleShot(0, self._schedule_visible_waveforms)
 
     def _schedule_visible_waveforms(self) -> None:
@@ -477,8 +496,8 @@ class MainWindow(QMainWindow):
         first = max(0, first if first >= 0 else 0)
         last = min(self.results.rowCount() - 1, last if last >= 0 else first + 20)
         for row in range(first, last + 1):
-            waveform_item = self.results.item(row, 2)
-            path_item = self.results.item(row, 3)
+            waveform_item = self.results.item(row, 3)
+            path_item = self.results.item(row, 4)
             if waveform_item is None or path_item is None:
                 continue
             path_text = str(path_item.data(Qt.ItemDataRole.UserRole))
@@ -497,18 +516,18 @@ class MainWindow(QMainWindow):
         self._waveform_pending.discard(path)
         matching_row = row if row < self.results.rowCount() else -1
         if matching_row >= 0:
-            candidate = self.results.item(matching_row, 3)
+            candidate = self.results.item(matching_row, 4)
             if candidate is None or str(candidate.data(Qt.ItemDataRole.UserRole)) != path:
                 matching_row = -1
         if matching_row < 0:
             for candidate_row in range(self.results.rowCount()):
-                candidate = self.results.item(candidate_row, 3)
+                candidate = self.results.item(candidate_row, 4)
                 if candidate is not None and str(candidate.data(Qt.ItemDataRole.UserRole)) == path:
                     matching_row = candidate_row
                     break
         if matching_row < 0:
             return
-        waveform_item = self.results.item(matching_row, 2)
+        waveform_item = self.results.item(matching_row, 3)
         if waveform_item is None:
             return
         waveform_item.setData(WAVEFORM_ROLE, points)
@@ -569,7 +588,7 @@ class MainWindow(QMainWindow):
     def play_selected_result(self) -> None:
         row = self.results.currentRow()
         if row >= 0:
-            item = self.results.item(row, 3)
+            item = self.results.item(row, 4)
             self.playing_row = row
             self.playing_path = Path(item.data(Qt.ItemDataRole.UserRole))
             self.play_path(self.playing_path)
@@ -603,17 +622,35 @@ class MainWindow(QMainWindow):
     def _playback_state_changed(self, playing_now: bool) -> None:
         self._audio_is_playing = playing_now
         self._set_query_playback_button_state(playing_now)
+        if not playing_now:
+            self._clear_playback_progress()
+
+    def _playback_progress_changed(self, progress: float) -> None:
+        if not self._audio_is_playing:
+            return
+        if self.playing_path is None:
+            self.query_waveform.set_playback_progress(progress)
+            return
         for row in range(self.results.rowCount()):
-            path_item = self.results.item(row, 3)
+            path_item = self.results.item(row, 4)
             row_path = (
                 Path(path_item.data(Qt.ItemDataRole.UserRole)) if path_item is not None else None
             )
-            playing = row_path == self.playing_path and playing_now
-            brush = QBrush(QColor("#d8f3dc")) if playing else QBrush()
-            for column in range(self.results.columnCount()):
-                item = self.results.item(row, column)
-                if item is not None:
-                    item.setBackground(brush)
+            waveform_item = self.results.item(row, 3)
+            if waveform_item is not None:
+                waveform_item.setData(
+                    PLAYBACK_PROGRESS_ROLE,
+                    progress if row_path == self.playing_path else None,
+                )
+        self.results.viewport().update()
+
+    def _clear_playback_progress(self) -> None:
+        self.query_waveform.set_playback_progress(None)
+        for row in range(self.results.rowCount()):
+            waveform_item = self.results.item(row, 3)
+            if waveform_item is not None:
+                waveform_item.setData(PLAYBACK_PROGRESS_ROLE, None)
+        self.results.viewport().update()
 
     def selected_result_path(self) -> Path | None:
         paths = self.results.selected_paths()

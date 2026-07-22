@@ -1,0 +1,98 @@
+/* Warbeats SonicDNA Dark Gray theme: neutral charcoal with restrained silver accents. */
+QWidget {
+    background-color: #292929;
+    color: #e2e2e2;
+}
+QMainWindow, QDialog { background-color: #202020; }
+QGroupBox {
+    border: 1px solid #525252;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #d0d0d0;
+}
+QPushButton, QComboBox, QSpinBox {
+    background-color: #383838;
+    color: #ededed;
+    border: 1px solid #606060;
+    border-radius: 4px;
+    padding: 5px 9px;
+}
+QPushButton:hover, QComboBox:hover, QSpinBox:hover {
+    background-color: #484848;
+    border-color: #858585;
+}
+QPushButton:pressed { background-color: #242424; }
+QPushButton:disabled { color: #777777; background-color: #303030; }
+QListWidget, QTableWidget {
+    background-color: #262626;
+    alternate-background-color: #303030;
+    border: 1px solid #505050;
+    gridline-color: #454545;
+    selection-background-color: #606060;
+    selection-color: #ffffff;
+}
+QHeaderView::section {
+    background-color: #353535;
+    color: #e0e0e0;
+    border: 0;
+    border-right: 1px solid #505050;
+    border-bottom: 1px solid #606060;
+    padding: 6px;
+}
+QMenuBar, QMenu { background-color: #292929; color: #e2e2e2; }
+QMenu::item:selected { background-color: #555555; }
+QProgressBar {
+    border: 1px solid #5c5c5c;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #343434;
+}
+QProgressBar::chunk { background-color: #777777; }
+QSlider::groove:horizontal {
+    height: 5px;
+    background: #4a4a4a;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    width: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+    background: #b0b0b0;
+}
+QToolTip {
+    background-color: #383838;
+    color: #f2f2f2;
+    border: 1px solid #777777;
+}
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #b8b8b8;
+    qproperty-waveformBackground: #242424;
+    qproperty-waveformTextColor: #f0f0f0;
+    qproperty-waveformOverlayColor: rgba(0, 0, 0, 0);
+    qproperty-waveformOutlineColor: #686868;
+}
+ThemedIconButton { qproperty-iconColor: #e0e0e0; }
+ThemedCheckBox {
+    qproperty-checkboxBackground: #242424;
+    qproperty-checkboxBorder: #a0a0a0;
+    qproperty-checkboxChecked: #707070;
+    qproperty-checkboxCheck: #ffffff;
+}
+QPushButton#find_similar {
+    background-color: #5b5b5b;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 5px 14px;
+    border: 1px solid #929292;
+    border-radius: 4px;
+}
+QPushButton#find_similar:hover { background-color: #707070; }
+QPushButton#find_similar:pressed { background-color: #464646; }
+QPushButton#find_similar:disabled { background-color: #393939; color: #777777; }

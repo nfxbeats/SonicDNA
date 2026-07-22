@@ -1,3 +1,3 @@
 """SonicDNA audio similarity search."""
 
-__version__ = "0.10.20"
+__version__ = "0.10.31"

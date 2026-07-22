@@ -25,7 +25,7 @@ class NumericTableWidgetItem(QTableWidgetItem):
 class ResultsTable(QTableWidget):
     """Drag selected results into Explorer, Finder, or a compatible DAW."""
 
-    PATH_COLUMN = 3
+    PATH_COLUMN = 4
     selected_row_clicked_again = Signal()
 
     def __init__(self, rows: int = 0, columns: int = 0, parent=None) -> None:

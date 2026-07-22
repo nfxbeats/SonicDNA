@@ -16,6 +16,7 @@ from scipy.signal import resample_poly
 
 class AudioPlayer(Protocol):
     playing_changed: Signal
+    progress_changed: Signal
 
     def play(self, path: Path) -> None: ...
     def stop(self) -> None: ...
@@ -52,6 +53,7 @@ class SoundDevicePlayer(QObject):
     """Persistent PortAudio stream with click-resistant sample transitions."""
 
     playing_changed = Signal(bool)
+    progress_changed = Signal(float)
 
     def __init__(self, volume: float = 0.8, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -67,6 +69,8 @@ class SoundDevicePlayer(QObject):
         self._pending: np.ndarray | None = None
         self._stop_requested = False
         self._is_playing = False
+        self._total_frames = 0
+        self._last_progress = -1.0
         self._fade_frames = max(16, round(self.sample_rate * 0.005))
         self._stream = sd.OutputStream(
             samplerate=self.sample_rate,
@@ -84,10 +88,13 @@ class SoundDevicePlayer(QObject):
         data = self._prepare(path)
         with self._lock:
             self._pending = data
+            self._total_frames = data.shape[0]
+            self._last_progress = 0.0
             self._stop_requested = False
             if not self._is_playing:
                 self._is_playing = True
                 self.playing_changed.emit(True)
+        self.progress_changed.emit(0.0)
 
     def stop(self) -> None:
         with self._lock:
@@ -118,6 +125,7 @@ class SoundDevicePlayer(QObject):
 
     def _audio_callback(self, outdata: np.ndarray, frames: int, _time, _status) -> None:
         ended = False
+        progress: float | None = None
         with self._lock:
             if self._pending is not None:
                 incoming = self._pending
@@ -145,6 +153,14 @@ class SoundDevicePlayer(QObject):
             if self._current is None and self._pending is None and self._is_playing:
                 self._is_playing = False
                 ended = True
+                progress = 1.0
+            elif self._current is not None and self._total_frames > 0:
+                current_progress = min(1.0, self._position / self._total_frames)
+                if current_progress - self._last_progress >= 0.01:
+                    self._last_progress = current_progress
+                    progress = current_progress
+        if progress is not None:
+            self.progress_changed.emit(progress)
         if ended:
             self.playing_changed.emit(False)
 
@@ -153,6 +169,7 @@ class QtAudioPlayer(QObject):
     """Qt Multimedia fallback when PortAudio is unavailable."""
 
     playing_changed = Signal(bool)
+    progress_changed = Signal(float)
 
     def __init__(self, volume: float = 0.8, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -165,10 +182,12 @@ class QtAudioPlayer(QObject):
                 state == QMediaPlayer.PlaybackState.PlayingState
             )
         )
+        self.player.positionChanged.connect(self._position_changed)
 
     def play(self, path: Path) -> None:
         self.player.stop()
         self.player.setSource(QUrl.fromLocalFile(str(path)))
+        self.progress_changed.emit(0.0)
         self.player.play()
 
     def stop(self) -> None:
@@ -179,6 +198,11 @@ class QtAudioPlayer(QObject):
 
     def close(self) -> None:
         self.player.stop()
+
+    def _position_changed(self, position: int) -> None:
+        duration = self.player.duration()
+        if duration > 0:
+            self.progress_changed.emit(min(1.0, max(0.0, position / duration)))
 
 
 def create_audio_player(volume: float, parent: QObject | None = None) -> tuple[AudioPlayer, str]:

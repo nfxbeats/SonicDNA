@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from threading import Event
+from time import perf_counter
 from collections.abc import Mapping
 
 from PySide6.QtCore import QObject, Signal, Slot
@@ -19,7 +20,7 @@ class LibraryWorker(QObject):
 
     progress = Signal(str, int, int)
     folder_complete = Signal(str, object)
-    results_ready = Signal(object)
+    results_ready = Signal(object, int, float)
     failed = Signal(str)
     finished = Signal(bool)
 
@@ -65,11 +66,18 @@ class LibraryWorker(QObject):
                     self.folder_complete.emit(str(folder), summary)
                     samples.extend(database.samples_for_folder(folder_id))
             if self.query is not None and not self._cancelled.is_set():
+                search_started = perf_counter()
                 query_vector = extract_features(self.query)
                 results: list[SearchResult] = search_index(
                     query_vector, self.query, samples, self.limit, self.weights
                 )
-                self.results_ready.emit(results)
+                query_resolved = self.query.resolve()
+                searched_files = sum(
+                    sample.path.resolve() != query_resolved for sample in samples
+                )
+                self.results_ready.emit(
+                    results, searched_files, perf_counter() - search_started
+                )
         except Exception as exc:  # Worker boundary: present failures without crashing Qt.
             self.failed.emit(f"{type(exc).__name__}: {exc}")
         finally:

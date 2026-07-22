@@ -35,6 +35,7 @@ class CompactWaveformWidget(QWidget):
         self._waveform_text_color = QColor("#ffffff")
         self._waveform_overlay_color = QColor(0, 0, 0, 125)
         self._waveform_outline_color = QColor("#52627a")
+        self._playback_progress: float | None = None
 
     def _set_color(self, attribute: str, value: QColor) -> None:
         color = QColor(value)
@@ -96,6 +97,13 @@ class CompactWaveformWidget(QWidget):
     def display_text(self) -> str:
         return self._display_text
 
+    def set_playback_progress(self, progress: float | None) -> None:
+        self._playback_progress = None if progress is None else min(1.0, max(0.0, progress))
+        self.update()
+
+    def playback_progress(self) -> float | None:
+        return self._playback_progress
+
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
@@ -137,6 +145,12 @@ class CompactWaveformWidget(QWidget):
                 path.lineTo(QPointF(x, center - float(minimum) * half_height))
             painter.setPen(QPen(self._waveform_color, 1.0))
             painter.drawPath(path)
+        if self._playback_progress is not None:
+            playhead_x = rect.left() + rect.width() * self._playback_progress
+            painter.setPen(QPen(self._waveform_text_color, 2.0))
+            painter.drawLine(
+                QPointF(playhead_x, rect.top()), QPointF(playhead_x, rect.bottom())
+            )
         text_rect = rect.adjusted(4, 2, -4, -2)
         painter.setPen(self._waveform_text_color)
         elided = painter.fontMetrics().elidedText(

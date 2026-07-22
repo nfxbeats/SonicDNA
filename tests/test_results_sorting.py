@@ -30,13 +30,17 @@ def test_new_search_resets_to_best_rank_first() -> None:
         SearchResult(Path("third.wav"), 75.0, 0.5),
     ]
     window._show_results(results)
-    window.results.sortItems(0, Qt.SortOrder.DescendingOrder)
-    assert window.results.item(0, 0).text() == "3"
+    window.results.sortItems(1, Qt.SortOrder.DescendingOrder)
+    assert window.results.item(0, 1).text() == "3"
 
     window._show_results(results)
 
-    assert window.results.item(0, 0).text() == "1"
-    assert window.results.horizontalHeader().sortIndicatorSection() == 0
+    assert window.results.item(0, 1).text() == "1"
+    assert window.results.horizontalHeader().sortIndicatorSection() == 1
     assert window.results.horizontalHeader().sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+    window._show_results(results, searched_files=312, elapsed_seconds=1.236)
+    assert window.status.text() == (
+        "Found 3 similar sample(s). Searched 312 files in 1.24 seconds."
+    )
     window.close()
     application.processEvents()
