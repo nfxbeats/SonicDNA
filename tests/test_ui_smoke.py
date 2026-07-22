@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QGroupBox
 
 from sonicdna.ui.main_window import DONATE_URL, MainWindow, REPOSITORY_URL
@@ -12,6 +13,15 @@ def test_main_window_launches() -> None:
     window = MainWindow()
     assert window.windowTitle() == "Warbeats SonicDNA"
     assert window.results.columnCount() == 4
+    assert window.results.verticalHeader().isHidden()
+    assert window.results.horizontalHeader().sortIndicatorSection() == 0
+    assert (
+        window.results.horizontalHeader().sortIndicatorOrder() == Qt.SortOrder.AscendingOrder
+    )
+    assert window.query_waveform.height() == 46
+    assert window.query_waveform.width() == 300
+    assert window.query_waveform.display_text() == "Drop Sample Here"
+    assert "background-color: #2563eb" in window.find_button.styleSheet()
     layout = window.centralWidget().layout()
     query = window.findChild(QGroupBox, "query_group")
     library = window.findChild(QGroupBox, "library_group")

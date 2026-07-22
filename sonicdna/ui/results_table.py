@@ -6,7 +6,20 @@ from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Signal, Qt, QUrl
 from PySide6.QtGui import QDrag, QMouseEvent
-from PySide6.QtWidgets import QTableWidget
+from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
+
+
+class NumericTableWidgetItem(QTableWidgetItem):
+    """Display formatted text while sorting by the underlying numeric value."""
+
+    def __init__(self, text: str, value: float) -> None:
+        super().__init__(text)
+        self.sort_value = value
+
+    def __lt__(self, other: QTableWidgetItem) -> bool:
+        if isinstance(other, NumericTableWidgetItem):
+            return self.sort_value < other.sort_value
+        return super().__lt__(other)
 
 
 class ResultsTable(QTableWidget):

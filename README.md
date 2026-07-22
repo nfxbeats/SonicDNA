@@ -166,7 +166,12 @@ process new or modified files while reusing unchanged feature vectors.
 - Drag one or more folders from the operating-system file manager into the Sample Libraries list
 - Incremental background indexing with progress and cancellation
 - Browse for or drag-and-drop a query sample
+- Query files are accepted only when dropped inside the Query Sample panel
+- A 300-pixel query drop target that overlays the filename on a background-loaded waveform and
+  plays the query when clicked
 - Ranked similarity results with relative scores from 0 to 100
+- Sortable result columns with numeric Rank and Similarity ordering
+- Lazily loaded result waveforms with filenames overlaid in the Sample column
 - Query and result audio preview using Qt Multimedia; click, use Up/Down, double-click, press Space,
   or use Play Selected
 - Persistent Auto-play selection option for mouse and keyboard result navigation

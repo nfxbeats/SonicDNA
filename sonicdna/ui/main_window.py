@@ -6,15 +6,13 @@ import csv
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QThread, QTimer, Qt, QUrl
+from PySide6.QtCore import QItemSelectionModel, QPoint, QThread, QThreadPool, QTimer, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QBrush,
     QCloseEvent,
     QColor,
     QDesktopServices,
-    QDragEnterEvent,
-    QDropEvent,
     QKeySequence,
     QShortcut,
 )
@@ -48,9 +46,13 @@ from sonicdna.platform_actions import open_file, reveal_file
 from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.settings import create_settings
-from sonicdna.ui.results_table import ResultsTable
+from sonicdna.ui.results_table import NumericTableWidgetItem, ResultsTable
 from sonicdna.ui.library_list import LibraryListWidget
+from sonicdna.ui.compact_waveform import CompactWaveformWidget
+from sonicdna.ui.query_drop_group import QueryDropGroupBox
 from sonicdna.ui.weights_dialog import WeightsDialog
+from sonicdna.ui.waveform_delegate import WAVEFORM_ROLE, WaveformDelegate
+from sonicdna.ui.waveform_loader import WaveformTask
 from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
 from sonicdna.workers import LibraryWorker
 
@@ -66,14 +68,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Warbeats SonicDNA")
         self.setMinimumSize(760, 560)
         self.resize(1024, 700)
-        self.setAcceptDrops(True)
         self.settings = create_settings()
         self.worker_thread: QThread | None = None
         self.worker: LibraryWorker | None = None
         self.query_path: Path | None = None
         self.current_results: list[SearchResult] = []
         self.playing_row = -1
+        self.playing_path: Path | None = None
         self._close_pending = False
+        self._waveform_pending: set[str] = set()
+        self.waveform_pool = QThreadPool(self)
+        self.waveform_pool.setMaxThreadCount(2)
         self._build_ui()
         self._build_audio()
         self._restore_settings()
@@ -107,8 +112,9 @@ class MainWindow(QMainWindow):
         self.status = QLabel(f"Index: {default_database_path()}")
         library_layout.addWidget(self.progress, 4, 0, 1, 2)
         library_layout.addWidget(self.status, 5, 0, 1, 2)
-        query_group = QGroupBox("Query Sample (or drop an audio file anywhere)")
+        query_group = QueryDropGroupBox("Query Sample (drop an audio file in this panel)")
         query_group.setObjectName("query_group")
+        query_group.file_dropped.connect(lambda path: self.set_query(Path(path)))
         query_layout = QVBoxLayout(query_group)
         self.query_label = QLabel("No query selected")
         self.query_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -116,27 +122,41 @@ class MainWindow(QMainWindow):
         self.query_label.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
-        query_layout.addWidget(self.query_label)
-        query_controls = QHBoxLayout()
+        query_top_row = QHBoxLayout()
+        query_top_row.addWidget(self.query_label, 1)
         browse_button = QPushButton("Browse")
         browse_button.clicked.connect(self.browse_query)
         play_query = QPushButton("Play")
         play_query.clicked.connect(self.play_query)
         stop_button = QPushButton("Stop")
         stop_button.clicked.connect(self.stop_audio)
+        query_top_row.addWidget(browse_button)
+        query_top_row.addWidget(play_query)
+        query_top_row.addWidget(stop_button)
+        query_layout.addLayout(query_top_row)
+        query_waveform_row = QHBoxLayout()
+        self.query_waveform = CompactWaveformWidget()
+        self.query_waveform.clicked.connect(self.play_query)
+        self.query_waveform.file_dropped.connect(lambda path: self.set_query(Path(path)))
+        query_waveform_row.addWidget(self.query_waveform)
         self.find_button = QPushButton("Find Similar")
+        self.find_button.setObjectName("find_similar")
+        self.find_button.setStyleSheet(
+            "QPushButton { background-color: #2563eb; color: white; font-weight: 600; "
+            "padding: 5px 14px; border: 1px solid #1d4ed8; border-radius: 4px; }"
+            "QPushButton:hover { background-color: #1d4ed8; }"
+            "QPushButton:pressed { background-color: #1e40af; }"
+            "QPushButton:disabled { background-color: #94a3b8; color: #e2e8f0; }"
+        )
         self.find_button.clicked.connect(self.find_similar)
         self.result_count = QSpinBox()
         self.result_count.setRange(1, 1000)
         self.result_count.setValue(25)
-        query_controls.addWidget(browse_button)
-        query_controls.addWidget(play_query)
-        query_controls.addWidget(stop_button)
-        query_controls.addStretch(1)
-        query_controls.addWidget(QLabel("Results:"))
-        query_controls.addWidget(self.result_count)
-        query_controls.addWidget(self.find_button)
-        query_layout.addLayout(query_controls)
+        query_waveform_row.addStretch(1)
+        query_waveform_row.addWidget(QLabel("Results:"))
+        query_waveform_row.addWidget(self.result_count)
+        query_waveform_row.addWidget(self.find_button)
+        query_layout.addLayout(query_waveform_row)
         layout.addWidget(query_group)
 
         result_controls = QHBoxLayout()
@@ -182,8 +202,9 @@ class MainWindow(QMainWindow):
         self.results = ResultsTable(0, 4)
         self.results.setObjectName("results_table")
         self.results.setHorizontalHeaderLabels(
-            ["Rank", "Similarity", "Filename", "Full path"]
+            ["Rank", "Similarity", "Sample", "Full path"]
         )
+        self.results.verticalHeader().setVisible(False)
         self.results.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.results.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.results.setStyleSheet(
@@ -194,6 +215,7 @@ class MainWindow(QMainWindow):
         self.results.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.results.setDefaultDropAction(Qt.DropAction.CopyAction)
         self.results.setSortingEnabled(False)
+        self.results.horizontalHeader().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
         self.results.doubleClicked.connect(self.play_selected_result)
         self.results.currentCellChanged.connect(self._result_selection_changed)
         self.results.selected_row_clicked_again.connect(self.play_selected_result)
@@ -203,6 +225,12 @@ class MainWindow(QMainWindow):
         self.results.setColumnWidth(0, 60)
         self.results.setColumnWidth(1, 90)
         self.results.setColumnWidth(2, 250)
+        self.results.verticalHeader().setDefaultSectionSize(46)
+        self.results.setItemDelegateForColumn(2, WaveformDelegate(self.results))
+        self.results.verticalScrollBar().valueChanged.connect(self._schedule_visible_waveforms)
+        self.results.horizontalHeader().sortIndicatorChanged.connect(
+            self._results_sort_changed
+        )
         layout.addWidget(self.results, 1)
         layout.addWidget(library_group)
         self.setCentralWidget(root)
@@ -277,17 +305,16 @@ class MainWindow(QMainWindow):
             self.query_path = path.resolve()
             self.query_label.setText(str(self.query_path))
             self.query_label.setToolTip(str(self.query_path))
+            self.query_waveform.clear()
+            self.query_waveform.set_filename(self.query_path.name)
+            task = WaveformTask(-1, self.query_path, bins=320)
+            task.signals.loaded.connect(self._query_waveform_loaded)
+            self.waveform_pool.start(task)
 
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
-        urls = event.mimeData().urls()
-        if urls and urls[0].isLocalFile():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
-        urls = event.mimeData().urls()
-        if urls:
-            self.set_query(Path(urls[0].toLocalFile()))
-            event.acceptProposedAction()
+    def _query_waveform_loaded(self, _row: int, path: str, points: object) -> None:
+        if self.query_path is None or str(self.query_path) != path:
+            return
+        self.query_waveform.set_points(list(points))
 
     def scan(self) -> None:
         if not self.folders():
@@ -349,16 +376,70 @@ class MainWindow(QMainWindow):
     def _show_results(self, results: list[SearchResult]) -> None:
         self.current_results = results
         self.playing_row = -1
+        self.playing_path = None
+        self._waveform_pending.clear()
+        self.results.setSortingEnabled(False)
+        self.results.horizontalHeader().setSortIndicator(0, Qt.SortOrder.AscendingOrder)
         self.results.setRowCount(len(results))
         for row, result in enumerate(results):
-            rank = QTableWidgetItem(str(row + 1))
-            score = QTableWidgetItem(f"{result.similarity_score:.2f}")
+            rank = NumericTableWidgetItem(str(row + 1), row + 1)
+            score = NumericTableWidgetItem(
+                f"{result.similarity_score:.2f}", result.similarity_score
+            )
             filename = QTableWidgetItem(result.path.name)
             full_path = QTableWidgetItem(str(result.path))
             full_path.setData(Qt.ItemDataRole.UserRole, str(result.path))
             for column, item in enumerate((rank, score, filename, full_path)):
                 self.results.setItem(row, column, item)
+        self.results.setSortingEnabled(True)
+        self.results.sortItems(0, Qt.SortOrder.AscendingOrder)
         self.status.setText(f"Found {len(results)} similar sample(s).")
+        QTimer.singleShot(0, self._schedule_visible_waveforms)
+
+    def _schedule_visible_waveforms(self) -> None:
+        if self.results.rowCount() == 0:
+            return
+        first = self.results.indexAt(QPoint(0, 0)).row()
+        last = self.results.indexAt(QPoint(0, self.results.viewport().height() - 1)).row()
+        first = max(0, first if first >= 0 else 0)
+        last = min(self.results.rowCount() - 1, last if last >= 0 else first + 20)
+        for row in range(first, last + 1):
+            waveform_item = self.results.item(row, 2)
+            path_item = self.results.item(row, 3)
+            if waveform_item is None or path_item is None:
+                continue
+            path_text = str(path_item.data(Qt.ItemDataRole.UserRole))
+            if waveform_item.data(WAVEFORM_ROLE) is not None or path_text in self._waveform_pending:
+                continue
+            self._waveform_pending.add(path_text)
+            task = WaveformTask(row, Path(path_text))
+            task.signals.loaded.connect(self._waveform_loaded)
+            self.waveform_pool.start(task)
+
+    def _results_sort_changed(self, _column: int, _order: Qt.SortOrder) -> None:
+        # Sorting changes which paths are visible without necessarily moving the scrollbar.
+        QTimer.singleShot(0, self._schedule_visible_waveforms)
+
+    def _waveform_loaded(self, row: int, path: str, points: object) -> None:
+        self._waveform_pending.discard(path)
+        matching_row = row if row < self.results.rowCount() else -1
+        if matching_row >= 0:
+            candidate = self.results.item(matching_row, 3)
+            if candidate is None or str(candidate.data(Qt.ItemDataRole.UserRole)) != path:
+                matching_row = -1
+        if matching_row < 0:
+            for candidate_row in range(self.results.rowCount()):
+                candidate = self.results.item(candidate_row, 3)
+                if candidate is not None and str(candidate.data(Qt.ItemDataRole.UserRole)) == path:
+                    matching_row = candidate_row
+                    break
+        if matching_row < 0:
+            return
+        waveform_item = self.results.item(matching_row, 2)
+        if waveform_item is None:
+            return
+        waveform_item.setData(WAVEFORM_ROLE, points)
+        self.results.viewport().update(self.results.visualItemRect(waveform_item))
 
     def _show_error(self, message: str) -> None:
         self.status.setText("Operation failed")
@@ -395,6 +476,7 @@ class MainWindow(QMainWindow):
     def play_query(self) -> None:
         if self.query_path is not None:
             self.playing_row = -1
+            self.playing_path = None
             self.play_path(self.query_path)
 
     def play_selected_result(self) -> None:
@@ -402,7 +484,8 @@ class MainWindow(QMainWindow):
         if row >= 0:
             item = self.results.item(row, 3)
             self.playing_row = row
-            self.play_path(Path(item.data(Qt.ItemDataRole.UserRole)))
+            self.playing_path = Path(item.data(Qt.ItemDataRole.UserRole))
+            self.play_path(self.playing_path)
 
     def _result_selection_changed(
         self, current_row: int, _current_column: int, previous_row: int, _previous_column: int
@@ -432,7 +515,11 @@ class MainWindow(QMainWindow):
 
     def _playback_state_changed(self, playing_now: bool) -> None:
         for row in range(self.results.rowCount()):
-            playing = row == self.playing_row and playing_now
+            path_item = self.results.item(row, 3)
+            row_path = (
+                Path(path_item.data(Qt.ItemDataRole.UserRole)) if path_item is not None else None
+            )
+            playing = row_path == self.playing_path and playing_now
             brush = QBrush(QColor("#d8f3dc")) if playing else QBrush()
             for column in range(self.results.columnCount()):
                 item = self.results.item(row, column)
