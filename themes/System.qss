@@ -1,4 +1,18 @@
 /* System theme: intentionally empty so Qt follows the operating-system palette. */
+ThemedIconButton {
+    qproperty-iconColor: #374151;
+}
+QPushButton#find_similar {
+    background-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 5px 14px;
+    border: 1px solid #1d4ed8;
+    border-radius: 4px;
+}
+QPushButton#find_similar:hover { background-color: #1d4ed8; }
+QPushButton#find_similar:pressed { background-color: #1e40af; }
+QPushButton#find_similar:disabled { background-color: #94a3b8; color: #e2e8f0; }
 CompactWaveformWidget, ResultsTable {
     qproperty-waveformColor: #7ad3ff;
     qproperty-waveformBackground: #172033;

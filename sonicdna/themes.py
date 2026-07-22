@@ -63,6 +63,25 @@ def ensure_default_themes() -> Path:
                         + local_text[block_end:]
                     )
                     target.write_text(updated, encoding="utf-8")
+            local_text = target.read_text(encoding="utf-8")
+            if "qproperty-iconColor" not in local_text:
+                bundled_text = bundled.read_text(encoding="utf-8")
+                block_start = bundled_text.rfind("ThemedIconButton {")
+                block_end = bundled_text.find("}", block_start)
+                if block_start >= 0 and block_end >= 0:
+                    icon_block = bundled_text[block_start:block_end + 1]
+                    target.write_text(
+                        f"{local_text.rstrip()}\n\n{icon_block}\n", encoding="utf-8"
+                    )
+            local_text = target.read_text(encoding="utf-8")
+            if "QPushButton#find_similar" not in local_text:
+                bundled_text = bundled.read_text(encoding="utf-8")
+                block_start = bundled_text.rfind("QPushButton#find_similar {")
+                if block_start >= 0:
+                    button_blocks = bundled_text[block_start:].strip()
+                    target.write_text(
+                        f"{local_text.rstrip()}\n\n{button_blocks}\n", encoding="utf-8"
+                    )
     return destination
 
 

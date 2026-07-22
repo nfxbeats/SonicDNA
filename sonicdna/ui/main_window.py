@@ -57,6 +57,7 @@ from sonicdna.playback import create_audio_player
 from sonicdna.search import SearchResult
 from sonicdna.settings import create_settings
 from sonicdna.ui.results_table import NumericTableWidgetItem, ResultsTable
+from sonicdna.ui.themed_icon_button import ThemedIconButton
 from sonicdna.ui.library_list import LibraryListWidget
 from sonicdna.ui.compact_waveform import CompactWaveformWidget
 from sonicdna.ui.query_drop_group import QueryDropGroupBox
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
         self.current_results: list[SearchResult] = []
         self.playing_row = -1
         self.playing_path: Path | None = None
+        self._audio_is_playing = False
         self._close_pending = False
         self._waveform_pending: set[str] = set()
         self.waveform_pool = QThreadPool(self)
@@ -138,18 +140,23 @@ class MainWindow(QMainWindow):
         self.query_waveform.clicked.connect(self.play_query)
         self.query_waveform.file_dropped.connect(lambda path: self.set_query(Path(path)))
         query_top_row.addWidget(self.query_waveform)
-        browse_button = QPushButton("Browse")
+        browse_button = ThemedIconButton("fa6s.folder-open")
+        browse_button.setObjectName("browse_query")
+        browse_button.setFixedSize(34, 34)
+        browse_button.setToolTip("Browse for query sample")
+        browse_button.setAccessibleName("Browse for query sample")
         browse_button.clicked.connect(self.browse_query)
-        play_query = QPushButton("Play")
-        play_query.clicked.connect(self.play_query)
-        stop_button = QPushButton("Stop")
-        stop_button.clicked.connect(self.stop_audio)
+        self.query_playback_button = ThemedIconButton("fa6s.play")
+        self.query_playback_button.setObjectName("query_playback")
+        self.query_playback_button.setFixedSize(34, 34)
+        self.query_playback_button.clicked.connect(self.toggle_query_playback)
+        self._set_query_playback_button_state(False)
         self.result_count = QSpinBox()
         self.result_count.setRange(1, 1000)
         self.result_count.setValue(25)
+        self.result_count.setFixedWidth(84)
         query_top_row.addWidget(browse_button)
-        query_top_row.addWidget(play_query)
-        query_top_row.addWidget(stop_button)
+        query_top_row.addWidget(self.query_playback_button)
         results_label = QLabel("Results:")
         results_label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -159,13 +166,6 @@ class MainWindow(QMainWindow):
         self.find_button = QPushButton("Find Similar")
         self.find_button.setObjectName("find_similar")
         self.find_button.setMinimumWidth(170)
-        self.find_button.setStyleSheet(
-            "QPushButton { background-color: #2563eb; color: white; font-weight: 600; "
-            "padding: 5px 14px; border: 1px solid #1d4ed8; border-radius: 4px; }"
-            "QPushButton:hover { background-color: #1d4ed8; }"
-            "QPushButton:pressed { background-color: #1e40af; }"
-            "QPushButton:disabled { background-color: #94a3b8; color: #e2e8f0; }"
-        )
         self.find_button.clicked.connect(self.find_similar)
         query_top_row.addWidget(self.find_button)
         query_layout.addLayout(query_top_row)
@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         donate_button = QPushButton("Donate")
         donate_button.setToolTip(DONATE_URL)
         donate_button.clicked.connect(self.open_donate)
-        self.auto_audition = QCheckBox("Auto-play selection")
+        self.auto_audition = QCheckBox("Auto-play")
         self.auto_audition.setChecked(True)
         self.auto_audition.toggled.connect(self._save_auto_audition)
         self.volume_slider = QSlider(Qt.Orientation.Horizontal)
@@ -297,6 +297,7 @@ class MainWindow(QMainWindow):
         geometry = self.settings.value("window_geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
+        self._ensure_window_position_visible()
         folders = self.settings.value("library_folders", [])
         if isinstance(folders, str):
             folders = [folders]
@@ -306,6 +307,26 @@ class MainWindow(QMainWindow):
         self.result_count.setValue(int(self.settings.value("result_count", 25)))
         self.auto_audition.setChecked(
             self.settings.value("auto_audition", True, type=bool)
+        )
+
+    def _ensure_window_position_visible(self) -> None:
+        """Keep restored geometry on-screen and out of negative coordinates."""
+        frame = self.frameGeometry()
+        screen = QApplication.screenAt(frame.center())
+        if screen is None or screen.availableGeometry().right() < 0:
+            screen = QApplication.primaryScreen()
+        if screen is None:
+            self.move(max(0, self.x()), max(0, self.y()))
+            return
+
+        available = screen.availableGeometry()
+        left = max(0, available.left())
+        top = max(0, available.top())
+        max_x = max(left, available.right() - frame.width() + 1)
+        max_y = max(top, available.bottom() - frame.height() + 1)
+        self.move(
+            min(max(left, self.x()), max_x),
+            min(max(top, self.y()), max_y),
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
@@ -531,6 +552,20 @@ class MainWindow(QMainWindow):
             self.playing_path = None
             self.play_path(self.query_path)
 
+    def toggle_query_playback(self) -> None:
+        """Play the query, or stop whichever sample is currently playing."""
+        if self._audio_is_playing:
+            self.stop_audio()
+        else:
+            self.play_query()
+
+    def _set_query_playback_button_state(self, playing: bool) -> None:
+        glyph = "fa6s.stop" if playing else "fa6s.play"
+        action = "Stop playback" if playing else "Play query sample"
+        self.query_playback_button.set_glyph(glyph)
+        self.query_playback_button.setToolTip(action)
+        self.query_playback_button.setAccessibleName(action)
+
     def play_selected_result(self) -> None:
         row = self.results.currentRow()
         if row >= 0:
@@ -566,6 +601,8 @@ class MainWindow(QMainWindow):
         self.player.stop()
 
     def _playback_state_changed(self, playing_now: bool) -> None:
+        self._audio_is_playing = playing_now
+        self._set_query_playback_button_state(playing_now)
         for row in range(self.results.rowCount()):
             path_item = self.results.item(row, 3)
             row_path = (
@@ -690,7 +727,7 @@ class MainWindow(QMainWindow):
         available = {**BUILTIN_PRESETS, **self.custom_weight_presets()}
         baseline = available.get(name, BUILTIN_PRESETS["Closest"])
         marker = "*" if not weights_match(self.similarity_weights(), baseline) else ""
-        self.weights_button.setText(f"Similarity Weights: {name}{marker}…")
+        self.weights_button.setText(f"Weights: {name}{marker}…")
 
     def export_csv(self) -> None:
         if not self.current_results:

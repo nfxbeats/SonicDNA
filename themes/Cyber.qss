@@ -93,3 +93,17 @@ CompactWaveformWidget, ResultsTable {
     qproperty-waveformOverlayColor: rgba(192, 38, 211, 120);
     qproperty-waveformOutlineColor: #f72585;
 }
+ThemedIconButton {
+    qproperty-iconColor: #67e8f9;
+}
+QPushButton#find_similar {
+    background-color: #0891b2;
+    color: #ecfeff;
+    font-weight: 600;
+    padding: 5px 14px;
+    border: 1px solid #22d3ee;
+    border-radius: 4px;
+}
+QPushButton#find_similar:hover { background-color: #06b6d4; color: #030611; }
+QPushButton#find_similar:pressed { background-color: #0e7490; }
+QPushButton#find_similar:disabled { background-color: #1e293b; color: #64748b; }

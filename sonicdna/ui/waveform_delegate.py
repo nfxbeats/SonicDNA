@@ -47,14 +47,18 @@ class WaveformDelegate(QStyledItemDelegate):
             painter.setPen(QPen(waveform, 1.0))
             painter.drawPath(path)
 
-        text_rect = QRectF(rect.left(), rect.center().y() - 10, rect.width(), 20)
+        text_rect = rect.adjusted(4, 2, -4, -2)
         painter.setPen(text)
         elided = option.fontMetrics.elidedText(
             str(index.data(Qt.ItemDataRole.DisplayRole)),
             Qt.TextElideMode.ElideMiddle,
-            int(text_rect.width()) - 8,
+            int(text_rect.width()),
         )
-        painter.drawText(text_rect.adjusted(4, 0, -4, 0), Qt.AlignmentFlag.AlignCenter, elided)
+        painter.drawText(
+            text_rect,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+            elided,
+        )
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(outline, 1.0))
         painter.drawRoundedRect(rect, 4, 4)

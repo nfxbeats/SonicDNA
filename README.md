@@ -170,7 +170,7 @@ process new or modified files while reusing unchanged feature vectors.
 - Add and remove multiple recursively scanned library folders
 - Drag one or more folders from the operating-system file manager into the Sample Libraries list
 - Incremental background indexing with progress and cancellation
-- Browse for or drag-and-drop a query sample
+- Browse for or drag-and-drop a query sample using the compact folder button
 - Query files are accepted only when dropped inside the Query Sample panel
 - A 300-pixel query drop target that overlays the filename on a background-loaded waveform and
   plays the query when clicked
@@ -178,16 +178,16 @@ process new or modified files while reusing unchanged feature vectors.
 - Sortable result columns with numeric Rank and Similarity ordering
 - Lazily loaded result waveforms with filenames overlaid in the Sample column
 - Query and result audio preview; click, use Up/Down, double-click, or press Space
-- Persistent Auto-play selection option for mouse and keyboard result navigation
-- Persistent preview-volume slider next to Auto-play selection
+- Persistent Auto-play option for mouse and keyboard result navigation
+- Persistent preview-volume slider next to Auto-play
 - Clicking the already-selected result restarts it from the beginning
 - Low-latency `sounddevice` playback with resampling and 5 ms click-resistant transitions
 - Automatic Qt Multimedia fallback when PortAudio or an output device is unavailable
-- A playing-row indicator and immediate Stop control
+- A playing-row indicator and a combined Play/Stop button that follows playback state
 - Drag one or more selected result files into compatible DAWs or the system file manager
 - Right-click actions to play, reveal, open, copy the full path, or copy the filename
 - CSV export of the current ranked results
-- Popup Similarity Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
+- Popup Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
   Noise/Distortion, and Duration, with the persisted Closest default and Reset Defaults
 - Persistent folders, window geometry, result count, and preview volume
 - File-backed System, Dark, and user-created themes with persisted selection
@@ -270,6 +270,18 @@ CompactWaveformWidget, ResultsTable {
 
 Waveform filename text is drawn on a transparent background.
 
+The Browse and Play/Stop buttons use Font Awesome 6 glyphs. Their color is also themeable:
+
+```css
+ThemedIconButton {
+    qproperty-iconColor: #67e8f9;
+}
+```
+
+The Find Similar button is styled entirely by the active theme. A custom theme can define its
+normal and interaction colors with the `QPushButton#find_similar`, `:hover`, `:pressed`, and
+`:disabled` selectors. See any bundled theme for a complete example.
+
 ## Persistent index
 
 The first search recursively analyzes the entire library and stores feature vectors in the
@@ -290,7 +302,7 @@ They are useful for ranking, but are not calibrated probabilities or percentages
 
 ## Similarity weights
 
-Open **Similarity Weights…** above the results list to control which acoustic characteristics
+Open **Weights…** above the results list to control which acoustic characteristics
 matter most when SonicDNA ranks matches. A higher value gives that characteristic more influence;
 a lower value makes it less important. Setting a weight to `0.00` removes that characteristic
 from the comparison.
@@ -322,7 +334,7 @@ to store the current slider state under your own name. Custom presets persist ac
 restarts and can be loaded or deleted from the same popup. Built-in profiles cannot be overwritten
 or deleted.
 
-The active preset name appears both in the popup and on the main **Similarity Weights** button.
+The active preset name appears both in the popup and on the main **Weights** button.
 Changing a slider adds `*` to the name (for example, `Snare*`) to indicate that the active values
 have been modified from that preset.
 

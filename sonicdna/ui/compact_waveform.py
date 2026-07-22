@@ -137,12 +137,16 @@ class CompactWaveformWidget(QWidget):
                 path.lineTo(QPointF(x, center - float(minimum) * half_height))
             painter.setPen(QPen(self._waveform_color, 1.0))
             painter.drawPath(path)
-        text_rect = QRectF(rect.left(), rect.center().y() - 10, rect.width(), 20)
+        text_rect = rect.adjusted(4, 2, -4, -2)
         painter.setPen(self._waveform_text_color)
         elided = painter.fontMetrics().elidedText(
-            self._display_text, Qt.TextElideMode.ElideMiddle, int(text_rect.width()) - 8
+            self._display_text, Qt.TextElideMode.ElideMiddle, int(text_rect.width())
         )
-        painter.drawText(text_rect.adjusted(4, 0, -4, 0), Qt.AlignmentFlag.AlignCenter, elided)
+        painter.drawText(
+            text_rect,
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+            elided,
+        )
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(self._waveform_outline_color, 1.0))
         painter.drawRoundedRect(rect, 4, 4)

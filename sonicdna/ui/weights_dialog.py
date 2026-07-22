@@ -39,7 +39,7 @@ class WeightsDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Similarity Weights")
+        self.setWindowTitle("Weights")
         self.setMinimumWidth(460)
         root = QVBoxLayout(self)
         explanation = QLabel(
@@ -185,7 +185,7 @@ class WeightsDialog(QDialog):
 
     def save_named_preset(self, name: str) -> bool:
         if any(name.casefold() == builtin.casefold() for builtin in BUILTIN_PRESETS):
-            QMessageBox.warning(self, "Similarity Weights", "Built-in presets cannot be replaced.")
+            QMessageBox.warning(self, "Weights", "Built-in presets cannot be replaced.")
             return False
         existing = next(
             (saved for saved in self.custom_presets if saved.casefold() == name.casefold()), None
