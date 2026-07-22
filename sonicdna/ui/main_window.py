@@ -6,7 +6,16 @@ import csv
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QItemSelectionModel, QPoint, QThread, QThreadPool, QTimer, Qt, QUrl
+from PySide6.QtCore import (
+    QItemSelectionModel,
+    QPoint,
+    QSignalBlocker,
+    QThread,
+    QThreadPool,
+    QTimer,
+    Qt,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAction,
     QBrush,
@@ -20,6 +29,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QGridLayout,
@@ -54,6 +64,7 @@ from sonicdna.ui.weights_dialog import WeightsDialog
 from sonicdna.ui.waveform_delegate import WAVEFORM_ROLE, WaveformDelegate
 from sonicdna.ui.waveform_loader import WaveformTask
 from sonicdna.weighting import BUILTIN_PRESETS, DEFAULT_WEIGHTS, normalize_weights, weights_match
+from sonicdna.themes import apply_theme, available_themes, theme_directory
 from sonicdna.workers import LibraryWorker
 
 REPOSITORY_URL = "https://github.com/nfxbeats/SonicDNA/tree/main#"
@@ -123,24 +134,31 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
         )
         query_top_row = QHBoxLayout()
-        query_top_row.addWidget(self.query_label, 1)
+        self.query_waveform = CompactWaveformWidget()
+        self.query_waveform.clicked.connect(self.play_query)
+        self.query_waveform.file_dropped.connect(lambda path: self.set_query(Path(path)))
+        query_top_row.addWidget(self.query_waveform)
         browse_button = QPushButton("Browse")
         browse_button.clicked.connect(self.browse_query)
         play_query = QPushButton("Play")
         play_query.clicked.connect(self.play_query)
         stop_button = QPushButton("Stop")
         stop_button.clicked.connect(self.stop_audio)
+        self.result_count = QSpinBox()
+        self.result_count.setRange(1, 1000)
+        self.result_count.setValue(25)
         query_top_row.addWidget(browse_button)
         query_top_row.addWidget(play_query)
         query_top_row.addWidget(stop_button)
-        query_layout.addLayout(query_top_row)
-        query_waveform_row = QHBoxLayout()
-        self.query_waveform = CompactWaveformWidget()
-        self.query_waveform.clicked.connect(self.play_query)
-        self.query_waveform.file_dropped.connect(lambda path: self.set_query(Path(path)))
-        query_waveform_row.addWidget(self.query_waveform)
+        results_label = QLabel("Results:")
+        results_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        query_top_row.addWidget(results_label)
+        query_top_row.addWidget(self.result_count)
         self.find_button = QPushButton("Find Similar")
         self.find_button.setObjectName("find_similar")
+        self.find_button.setMinimumWidth(170)
         self.find_button.setStyleSheet(
             "QPushButton { background-color: #2563eb; color: white; font-weight: 600; "
             "padding: 5px 14px; border: 1px solid #1d4ed8; border-radius: 4px; }"
@@ -149,24 +167,20 @@ class MainWindow(QMainWindow):
             "QPushButton:disabled { background-color: #94a3b8; color: #e2e8f0; }"
         )
         self.find_button.clicked.connect(self.find_similar)
-        self.result_count = QSpinBox()
-        self.result_count.setRange(1, 1000)
-        self.result_count.setValue(25)
-        query_waveform_row.addStretch(1)
-        query_waveform_row.addWidget(QLabel("Results:"))
-        query_waveform_row.addWidget(self.result_count)
-        query_waveform_row.addWidget(self.find_button)
-        query_layout.addLayout(query_waveform_row)
+        query_top_row.addWidget(self.find_button)
+        query_layout.addLayout(query_top_row)
+        query_layout.addWidget(self.query_label)
         layout.addWidget(query_group)
 
         result_controls = QHBoxLayout()
-        play_result = QPushButton("Play Selected")
-        play_result.clicked.connect(self.play_selected_result)
-        stop_result = QPushButton("Stop")
-        stop_result.clicked.connect(self.stop_audio)
-        export_button = QPushButton("Export Results to CSV")
+        self.theme_combo = QComboBox()
+        self.theme_combo.setObjectName("theme_selector")
+        self.theme_combo.setMinimumWidth(120)
+        self._populate_theme_combo()
+        self.theme_combo.currentIndexChanged.connect(self._theme_combo_changed)
+        export_button = QPushButton("Export")
         export_button.clicked.connect(self.export_csv)
-        repository_button = QPushButton("GitHub Repository")
+        repository_button = QPushButton("Github Repo")
         repository_button.setToolTip(REPOSITORY_URL)
         repository_button.clicked.connect(self.open_repository)
         donate_button = QPushButton("Donate")
@@ -187,11 +201,13 @@ class MainWindow(QMainWindow):
         self.weights_button = QPushButton()
         self.weights_button.clicked.connect(self.open_weights_dialog)
         self._update_weights_button()
-        result_controls.addWidget(play_result)
-        result_controls.addWidget(stop_result)
+        result_controls.addWidget(QLabel("Theme:"))
+        result_controls.addWidget(self.theme_combo)
+        result_controls.addSpacing(8)
         result_controls.addWidget(self.auto_audition)
         result_controls.addWidget(QLabel("Volume:"))
         result_controls.addWidget(self.volume_slider)
+        result_controls.addSpacing(8)
         result_controls.addWidget(self.weights_button)
         result_controls.addStretch(1)
         result_controls.addWidget(export_button)
@@ -235,6 +251,42 @@ class MainWindow(QMainWindow):
         layout.addWidget(library_group)
         self.setCentralWidget(root)
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, activated=self.play_selected_result)
+
+    def _populate_theme_combo(self) -> None:
+        selected = str(self.settings.value("theme", "System"))
+        themes = available_themes()
+        if selected not in themes:
+            selected = "System"
+        with QSignalBlocker(self.theme_combo):
+            self.theme_combo.clear()
+            for name in themes:
+                self.theme_combo.addItem(name, name)
+            selected_index = self.theme_combo.findData(selected)
+            self.theme_combo.setCurrentIndex(max(0, selected_index))
+            self.theme_combo.insertSeparator(self.theme_combo.count())
+            self.theme_combo.addItem("Refresh Themes…", "__refresh__")
+            self.theme_combo.addItem("Open Theme Folder…", "__open__")
+
+    def _theme_combo_changed(self, index: int) -> None:
+        choice = self.theme_combo.itemData(index)
+        if choice == "__refresh__":
+            self._populate_theme_combo()
+            self.status.setText("Theme list refreshed.")
+        elif choice == "__open__":
+            self.open_theme_folder()
+            self._populate_theme_combo()
+        elif isinstance(choice, str):
+            self.set_theme(choice)
+
+    def set_theme(self, name: str) -> None:
+        resolved = apply_theme(name)
+        self.settings.setValue("theme", resolved)
+        self.settings.sync()
+        self.status.setText(f"Theme: {resolved}")
+
+    def open_theme_folder(self) -> None:
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(theme_directory()))):
+            QMessageBox.warning(self, "Warbeats SonicDNA", "Could not open the theme folder.")
 
     def _build_audio(self) -> None:
         volume = self.volume_slider.value() / 100.0

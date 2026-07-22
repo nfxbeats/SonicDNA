@@ -16,8 +16,19 @@ class WaveformDelegate(QStyledItemDelegate):
         painter.save()
         rect = QRectF(option.rect.adjusted(3, 3, -3, -3))
         painter.setPen(Qt.PenStyle.NoPen)
+        widget = self.parent() or option.widget
+
+        def themed_color(property_name: str, fallback: QColor) -> QColor:
+            value = widget.property(property_name) if widget is not None else None
+            color = QColor(value) if value is not None else fallback
+            return color if color.isValid() else fallback
+
+        background = themed_color("waveformBackground", QColor("#172033"))
+        waveform = themed_color("waveformColor", QColor(122, 211, 255, 190))
+        text = themed_color("waveformTextColor", QColor("white"))
+        outline = themed_color("waveformOutlineColor", QColor("#52627a"))
         # Keep waveform rendering stable while the other cells show row selection.
-        painter.setBrush(QColor("#172033"))
+        painter.setBrush(background)
         painter.drawRoundedRect(rect, 4, 4)
 
         points = index.data(WAVEFORM_ROLE) or []
@@ -33,19 +44,18 @@ class WaveformDelegate(QStyledItemDelegate):
                 path.moveTo(QPointF(x, top))
                 path.lineTo(QPointF(x, bottom))
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-            painter.setPen(QPen(QColor(122, 211, 255, 190), 1.0))
+            painter.setPen(QPen(waveform, 1.0))
             painter.drawPath(path)
 
-        # A translucent strip keeps filenames legible over dense waveforms.
         text_rect = QRectF(rect.left(), rect.center().y() - 10, rect.width(), 20)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(0, 0, 0, 125))
-        painter.drawRect(text_rect)
-        painter.setPen(QColor("white"))
+        painter.setPen(text)
         elided = option.fontMetrics.elidedText(
             str(index.data(Qt.ItemDataRole.DisplayRole)),
             Qt.TextElideMode.ElideMiddle,
             int(text_rect.width()) - 8,
         )
         painter.drawText(text_rect.adjusted(4, 0, -4, 0), Qt.AlignmentFlag.AlignCenter, elided)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(outline, 1.0))
+        painter.drawRoundedRect(rect, 4, 4)
         painter.restore()

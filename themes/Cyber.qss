@@ -1,0 +1,95 @@
+/* Warbeats SonicDNA Cyber theme: deep space with cyan and magenta neon accents. */
+QWidget {
+    background-color: #070b1a;
+    color: #d8f7ff;
+}
+QMainWindow, QDialog {
+    background-color: #030611;
+}
+QGroupBox {
+    border: 1px solid #00bcd4;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #67e8f9;
+}
+QPushButton, QComboBox, QSpinBox {
+    background-color: #101936;
+    color: #e0fbff;
+    border: 1px solid #06b6d4;
+    border-radius: 4px;
+    padding: 5px 9px;
+}
+QPushButton:hover, QComboBox:hover, QSpinBox:hover {
+    background-color: #15234a;
+    border-color: #f72585;
+}
+QPushButton:pressed {
+    background-color: #090f25;
+}
+QPushButton:disabled {
+    color: #64748b;
+    border-color: #334155;
+    background-color: #0f172a;
+}
+QListWidget, QTableWidget {
+    background-color: #070b1a;
+    alternate-background-color: #0c1330;
+    border: 1px solid #164e63;
+    gridline-color: #164e63;
+    selection-background-color: #c026d3;
+    selection-color: white;
+}
+QHeaderView::section {
+    background-color: #101936;
+    color: #67e8f9;
+    border: 0;
+    border-right: 1px solid #164e63;
+    border-bottom: 1px solid #06b6d4;
+    padding: 6px;
+}
+QMenuBar, QMenu {
+    background-color: #070b1a;
+    color: #d8f7ff;
+}
+QMenu::item:selected {
+    background-color: #c026d3;
+}
+QProgressBar {
+    border: 1px solid #06b6d4;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #101936;
+}
+QProgressBar::chunk {
+    background-color: #00e5ff;
+}
+QSlider::groove:horizontal {
+    height: 5px;
+    background: #164e63;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    width: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+    background: #f72585;
+}
+QToolTip {
+    background-color: #101936;
+    color: #e0fbff;
+    border: 1px solid #f72585;
+}
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #22d3ee;
+    qproperty-waveformBackground: #050816;
+    qproperty-waveformTextColor: #f0fdff;
+    qproperty-waveformOverlayColor: rgba(192, 38, 211, 120);
+    qproperty-waveformOutlineColor: #f72585;
+}

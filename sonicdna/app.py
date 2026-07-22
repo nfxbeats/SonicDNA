@@ -9,6 +9,8 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from sonicdna.resources import application_icon_path
+from sonicdna.settings import create_settings
+from sonicdna.themes import apply_theme
 from sonicdna.ui.main_window import MainWindow
 
 
@@ -33,6 +35,12 @@ def run() -> int:
     application.setApplicationName("SonicDNA")
     application.setApplicationDisplayName("Warbeats SonicDNA")
     application.setOrganizationName("SonicDNA")
+    settings = create_settings()
+    selected_theme = str(settings.value("theme", "System"))
+    resolved_theme = apply_theme(selected_theme)
+    if resolved_theme != selected_theme:
+        settings.setValue("theme", resolved_theme)
+        settings.sync()
     icon = QIcon(str(application_icon_path()))
     application.setWindowIcon(icon)
     window = MainWindow()

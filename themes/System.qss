@@ -1,0 +1,8 @@
+/* System theme: intentionally empty so Qt follows the operating-system palette. */
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #7ad3ff;
+    qproperty-waveformBackground: #172033;
+    qproperty-waveformTextColor: #ffffff;
+    qproperty-waveformOverlayColor: rgba(0, 0, 0, 125);
+    qproperty-waveformOutlineColor: #52627a;
+}

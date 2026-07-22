@@ -1,0 +1,92 @@
+/* Warbeats SonicDNA built-in dark theme. Copy or edit this file to customize it. */
+QWidget {
+    background-color: #111827;
+    color: #e5e7eb;
+}
+QMainWindow, QDialog {
+    background-color: #0f172a;
+}
+QGroupBox {
+    border: 1px solid #374151;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+}
+QPushButton, QComboBox, QSpinBox {
+    background-color: #1f2937;
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    padding: 5px 9px;
+}
+QPushButton:hover, QComboBox:hover, QSpinBox:hover {
+    background-color: #374151;
+    border-color: #6b7280;
+}
+QPushButton:pressed {
+    background-color: #111827;
+}
+QPushButton:disabled {
+    color: #6b7280;
+    background-color: #1f2937;
+}
+QListWidget, QTableWidget {
+    background-color: #111827;
+    alternate-background-color: #172033;
+    border: 1px solid #374151;
+    gridline-color: #374151;
+    selection-background-color: #2563eb;
+    selection-color: white;
+}
+QHeaderView::section {
+    background-color: #1f2937;
+    color: #e5e7eb;
+    border: 0;
+    border-right: 1px solid #374151;
+    border-bottom: 1px solid #4b5563;
+    padding: 6px;
+}
+QMenuBar, QMenu {
+    background-color: #111827;
+    color: #e5e7eb;
+}
+QMenu::item:selected {
+    background-color: #2563eb;
+}
+QProgressBar {
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #1f2937;
+}
+QProgressBar::chunk {
+    background-color: #2563eb;
+}
+QSlider::groove:horizontal {
+    height: 5px;
+    background: #374151;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    width: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+    background: #60a5fa;
+}
+QToolTip {
+    background-color: #1f2937;
+    color: #f9fafb;
+    border: 1px solid #6b7280;
+}
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #7ad3ff;
+    qproperty-waveformBackground: #172033;
+    qproperty-waveformTextColor: #ffffff;
+    qproperty-waveformOverlayColor: rgba(0, 0, 0, 145);
+    qproperty-waveformOutlineColor: #52627a;
+}

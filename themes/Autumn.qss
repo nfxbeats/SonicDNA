@@ -1,0 +1,94 @@
+/* Warbeats SonicDNA Autumn theme: warm earth, amber, and rust tones. */
+QWidget {
+    background-color: #2b2118;
+    color: #f6e7cf;
+}
+QMainWindow, QDialog {
+    background-color: #211810;
+}
+QGroupBox {
+    border: 1px solid #795548;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding-top: 8px;
+    font-weight: 600;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #ffcc80;
+}
+QPushButton, QComboBox, QSpinBox {
+    background-color: #4a3323;
+    color: #fff3df;
+    border: 1px solid #9a6542;
+    border-radius: 4px;
+    padding: 5px 9px;
+}
+QPushButton:hover, QComboBox:hover, QSpinBox:hover {
+    background-color: #66452d;
+    border-color: #e59b54;
+}
+QPushButton:pressed {
+    background-color: #382418;
+}
+QPushButton:disabled {
+    color: #9b8878;
+    background-color: #382b22;
+}
+QListWidget, QTableWidget {
+    background-color: #281d15;
+    alternate-background-color: #332319;
+    border: 1px solid #704b35;
+    gridline-color: #5b3d2c;
+    selection-background-color: #b45309;
+    selection-color: #fff7ed;
+}
+QHeaderView::section {
+    background-color: #4a2f20;
+    color: #ffddb0;
+    border: 0;
+    border-right: 1px solid #704b35;
+    border-bottom: 1px solid #8b5a3c;
+    padding: 6px;
+}
+QMenuBar, QMenu {
+    background-color: #2b2118;
+    color: #f6e7cf;
+}
+QMenu::item:selected {
+    background-color: #b45309;
+}
+QProgressBar {
+    border: 1px solid #795548;
+    border-radius: 4px;
+    text-align: center;
+    background-color: #3b2a1f;
+}
+QProgressBar::chunk {
+    background-color: #d97706;
+}
+QSlider::groove:horizontal {
+    height: 5px;
+    background: #704b35;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    width: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+    background: #f59e0b;
+}
+QToolTip {
+    background-color: #4a3323;
+    color: #fff7ed;
+    border: 1px solid #d97706;
+}
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #f59e0b;
+    qproperty-waveformBackground: #3a2418;
+    qproperty-waveformTextColor: #fff7ed;
+    qproperty-waveformOverlayColor: rgba(69, 26, 3, 170);
+    qproperty-waveformOutlineColor: #c47a3b;
+}

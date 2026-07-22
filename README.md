@@ -172,8 +172,7 @@ process new or modified files while reusing unchanged feature vectors.
 - Ranked similarity results with relative scores from 0 to 100
 - Sortable result columns with numeric Rank and Similarity ordering
 - Lazily loaded result waveforms with filenames overlaid in the Sample column
-- Query and result audio preview using Qt Multimedia; click, use Up/Down, double-click, press Space,
-  or use Play Selected
+- Query and result audio preview; click, use Up/Down, double-click, or press Space
 - Persistent Auto-play selection option for mouse and keyboard result navigation
 - Persistent preview-volume slider next to Auto-play selection
 - Clicking the already-selected result restarts it from the beginning
@@ -186,6 +185,7 @@ process new or modified files while reusing unchanged feature vectors.
 - Popup Similarity Weights editor for Body/Pitch, Attack, Decay, Brightness, Timbre,
   Noise/Distortion, and Duration, with the persisted Closest default and Reset Defaults
 - Persistent folders, window geometry, result count, and preview volume
+- File-backed System, Dark, and user-created themes with persisted selection
 
 The application uses `sonicdna-logo.png` as its runtime icon. The PNG is the cross-platform
 master asset; `sonicdna.ico` is its Windows packaging derivative.
@@ -221,6 +221,49 @@ These data and settings locations are outside the repository and are not include
 control, so another user receives an empty index and default settings. The exception is an
 intentional CLI override such as `--database path/to/index.db`; avoid placing that custom database
 inside the repository if it should remain private.
+
+## Themes and customization
+
+Use the **Theme** dropdown above the results grid to select **System**, **Dark**, **Autumn**, or
+**Cyber**. Autumn uses warm amber and rust colors; Cyber uses cyan and magenta neon accents over a
+deep navy background. The selected theme persists
+across restarts. System follows the operating-system/Qt appearance; Dark applies SonicDNA's bundled
+dark stylesheet.
+
+On first launch, editable `.qss` theme files are copied into the local theme directory:
+
+| Platform | Theme directory |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\SonicDNA\themes` |
+| macOS | `~/Library/Application Support/SonicDNA/themes` |
+| Linux | `$XDG_DATA_HOME/SonicDNA/themes`, or `~/.local/share/SonicDNA/themes` |
+
+Choose **Open Theme Folder…** from the Theme dropdown to open the directory. The built-in files are created only
+when missing, so local edits are not overwritten on later launches.
+
+To create a custom theme:
+
+1. Copy `Dark.qss` or create another file with a `.qss` extension in the theme directory.
+2. Give the file a unique name, such as `Midnight Blue.qss`.
+3. Edit it using standard Qt Style Sheet syntax.
+4. Choose **Refresh Themes…** from the Theme dropdown.
+5. Select the new theme by its filename from the dropdown.
+
+Custom themes remain local and are not added to version control. To restore an edited built-in,
+delete its local file and restart SonicDNA; the bundled version will be copied again.
+
+Query and result waveform colors are also themeable. Add these Qt properties to a custom QSS file:
+
+```css
+CompactWaveformWidget, ResultsTable {
+    qproperty-waveformColor: #67e8f9;
+    qproperty-waveformBackground: #070b1a;
+    qproperty-waveformTextColor: #ffffff;
+    qproperty-waveformOutlineColor: #f72585;
+}
+```
+
+Waveform filename text is drawn on a transparent background.
 
 ## Persistent index
 

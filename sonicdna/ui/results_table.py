@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Signal, Qt, QUrl
-from PySide6.QtGui import QDrag, QMouseEvent
+from PySide6.QtCore import Property, QMimeData, Signal, Qt, QUrl
+from PySide6.QtGui import QColor, QDrag, QMouseEvent
 from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
 
 
@@ -27,6 +27,60 @@ class ResultsTable(QTableWidget):
 
     PATH_COLUMN = 3
     selected_row_clicked_again = Signal()
+
+    def __init__(self, rows: int = 0, columns: int = 0, parent=None) -> None:
+        super().__init__(rows, columns, parent)
+        self._waveform_color = QColor(122, 211, 255, 190)
+        self._waveform_background = QColor("#172033")
+        self._waveform_text_color = QColor("#ffffff")
+        self._waveform_overlay_color = QColor(0, 0, 0, 125)
+        self._waveform_outline_color = QColor("#52627a")
+
+    def _set_color(self, attribute: str, value: QColor) -> None:
+        color = QColor(value)
+        if color.isValid() and color != getattr(self, attribute):
+            setattr(self, attribute, color)
+            self.viewport().update()
+
+    def get_waveform_color(self) -> QColor:
+        return self._waveform_color
+
+    def set_waveform_color(self, value: QColor) -> None:
+        self._set_color("_waveform_color", value)
+
+    waveformColor = Property(QColor, get_waveform_color, set_waveform_color)
+
+    def get_waveform_background(self) -> QColor:
+        return self._waveform_background
+
+    def set_waveform_background(self, value: QColor) -> None:
+        self._set_color("_waveform_background", value)
+
+    waveformBackground = Property(QColor, get_waveform_background, set_waveform_background)
+
+    def get_waveform_text_color(self) -> QColor:
+        return self._waveform_text_color
+
+    def set_waveform_text_color(self, value: QColor) -> None:
+        self._set_color("_waveform_text_color", value)
+
+    waveformTextColor = Property(QColor, get_waveform_text_color, set_waveform_text_color)
+
+    def get_waveform_overlay_color(self) -> QColor:
+        return self._waveform_overlay_color
+
+    def set_waveform_overlay_color(self, value: QColor) -> None:
+        self._set_color("_waveform_overlay_color", value)
+
+    waveformOverlayColor = Property(QColor, get_waveform_overlay_color, set_waveform_overlay_color)
+
+    def get_waveform_outline_color(self) -> QColor:
+        return self._waveform_outline_color
+
+    def set_waveform_outline_color(self, value: QColor) -> None:
+        self._set_color("_waveform_outline_color", value)
+
+    waveformOutlineColor = Property(QColor, get_waveform_outline_color, set_waveform_outline_color)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         index = self.indexAt(event.position().toPoint())
