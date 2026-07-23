@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,13 @@ class IndexedSample:
     modified_ns: int
     size_bytes: int
     vector: np.ndarray
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryIndexStatus:
+    folder_id: int | None
+    last_scan_at: str | None
+    needs_scan: bool
 
 
 def default_database_path() -> Path:
@@ -118,6 +126,29 @@ class IndexDatabase:
         self.connection.commit()
         return int(row["id"])
 
+    def library_status(self, folder: Path) -> LibraryIndexStatus:
+        """Return whether a library has a complete, current-version cached index."""
+        canonical = str(folder.expanduser().resolve())
+        row = self.connection.execute(
+            "SELECT id, last_scan_at FROM library_folders WHERE path = ?", (canonical,)
+        ).fetchone()
+        if row is None:
+            return LibraryIndexStatus(None, None, True)
+        folder_id = int(row["id"])
+        stale_count = int(
+            self.connection.execute(
+                "SELECT COUNT(*) FROM samples "
+                "WHERE library_folder_id = ? AND feature_version != ?",
+                (folder_id, FEATURE_VERSION),
+            ).fetchone()[0]
+        )
+        last_scan_at = str(row["last_scan_at"]) if row["last_scan_at"] else None
+        return LibraryIndexStatus(
+            folder_id,
+            last_scan_at,
+            last_scan_at is None or stale_count > 0,
+        )
+
     def fingerprints(self, folder_id: int) -> dict[str, tuple[int, int, int]]:
         rows = self.connection.execute(
             "SELECT path, modified_ns, size_bytes, feature_version FROM samples "
@@ -193,19 +224,43 @@ class IndexDatabase:
         )
         self.connection.commit()
 
-    def samples_for_folder(self, folder_id: int) -> list[IndexedSample]:
-        rows = self.connection.execute(
+    def sample_count_for_folder(self, folder_id: int) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) FROM samples "
+            "WHERE library_folder_id = ? AND feature_version = ?",
+            (folder_id, FEATURE_VERSION),
+        ).fetchone()
+        return int(row[0])
+
+    def samples_for_folder(
+        self,
+        folder_id: int,
+        progress: Callable[[int, int], None] | None = None,
+        batch_size: int = 500,
+    ) -> list[IndexedSample]:
+        total = self.sample_count_for_folder(folder_id)
+        cursor = self.connection.execute(
             "SELECT path, modified_ns, size_bytes, feature_vector FROM samples "
             "WHERE library_folder_id = ? AND feature_version = ? ORDER BY path",
             (folder_id, FEATURE_VERSION),
-        ).fetchall()
+        )
         samples: list[IndexedSample] = []
-        for row in rows:
-            vector = np.frombuffer(row["feature_vector"], dtype="<f4").copy()
-            if vector.shape == (FEATURE_VECTOR_LENGTH,):
-                samples.append(IndexedSample(
-                    Path(row["path"]), int(row["modified_ns"]), int(row["size_bytes"]), vector
-                ))
+        loaded_rows = 0
+        while rows := cursor.fetchmany(batch_size):
+            for row in rows:
+                vector = np.frombuffer(row["feature_vector"], dtype="<f4").copy()
+                if vector.shape == (FEATURE_VECTOR_LENGTH,):
+                    samples.append(IndexedSample(
+                        Path(row["path"]),
+                        int(row["modified_ns"]),
+                        int(row["size_bytes"]),
+                        vector,
+                    ))
+            loaded_rows += len(rows)
+            if progress is not None:
+                progress(min(loaded_rows, total), total)
+        if progress is not None and loaded_rows == 0:
+            progress(0, total)
         return samples
 
     def rebuild_folder(self, folder_id: int) -> int:
@@ -218,3 +273,26 @@ class IndexDatabase:
         self.connection.commit()
         return count
 
+    def remove_library(self, folder: Path) -> int:
+        """Delete a library registration and its cached analysis, returning sample count."""
+        canonical = str(folder.expanduser().resolve())
+        row = self.connection.execute(
+            "SELECT id FROM library_folders WHERE path = ?", (canonical,)
+        ).fetchone()
+        if row is None:
+            return 0
+        folder_id = int(row["id"])
+        count = int(
+            self.connection.execute(
+                "SELECT COUNT(*) FROM samples WHERE library_folder_id = ?", (folder_id,)
+            ).fetchone()[0]
+        )
+        with self.connection:
+            self.connection.execute(
+                "DELETE FROM samples WHERE library_folder_id = ?", (folder_id,)
+            )
+            self.connection.execute(
+                "DELETE FROM indexing_errors WHERE library_folder_id = ?", (folder_id,)
+            )
+            self.connection.execute("DELETE FROM library_folders WHERE id = ?", (folder_id,))
+        return count

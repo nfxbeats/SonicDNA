@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import librosa
@@ -36,19 +37,30 @@ def load_audio(path: Path) -> tuple[np.ndarray, int]:
     return audio / peak, sample_rate
 
 
-def extract_features(path: Path) -> np.ndarray:
+def extract_features(
+    path: Path,
+    progress: Callable[[str, int, int], None] | None = None,
+) -> np.ndarray:
     """Extract the Version 1 fixed-length acoustic fingerprint."""
     validate_schema()
+    if progress is not None:
+        progress("Loading and preprocessing audio", 0, 6)
     audio, sr = load_audio(path)
+    if progress is not None:
+        progress("Computing spectrum", 1, 6)
     n_fft = min(2048, max(32, 2 ** int(np.floor(np.log2(max(32, audio.size))))))
     hop = max(1, n_fft // 4)
     spectrum = np.abs(librosa.stft(audio, n_fft=n_fft, hop_length=hop))
     power = spectrum**2
 
+    if progress is not None:
+        progress("Analyzing timbre and mel spectrum", 2, 6)
     mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=20, n_fft=n_fft, hop_length=hop)
     mel = librosa.feature.melspectrogram(
         y=audio, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=32
     )
+    if progress is not None:
+        progress("Analyzing brightness, noise, and energy", 3, 6)
     centroid = librosa.feature.spectral_centroid(S=power, sr=sr)
     bandwidth = librosa.feature.spectral_bandwidth(S=power, sr=sr)
     rolloff = librosa.feature.spectral_rolloff(S=power, sr=sr)
@@ -56,6 +68,8 @@ def extract_features(path: Path) -> np.ndarray:
     zcr = librosa.feature.zero_crossing_rate(audio, frame_length=n_fft, hop_length=hop)
     rms = librosa.feature.rms(S=spectrum, frame_length=n_fft, hop_length=hop)
 
+    if progress is not None:
+        progress("Analyzing attack and decay", 4, 6)
     envelope = np.abs(audio)
     peak_index = int(np.argmax(envelope))
     peak = float(envelope[peak_index])
@@ -70,6 +84,8 @@ def extract_features(path: Path) -> np.ndarray:
     body_energy = float(np.sum(audio[transient_end:] ** 2))
     transient_ratio = transient_energy / max(body_energy, 1e-12)
 
+    if progress is not None:
+        progress("Analyzing body, pitch, and duration", 5, 6)
     frequencies = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
     mean_power = np.mean(power, axis=1)
     low_mask = (frequencies >= 20) & (frequencies <= 300)
@@ -92,5 +108,6 @@ def extract_features(path: Path) -> np.ndarray:
     ]).astype(np.float32)
     if vector.shape != (FEATURE_VECTOR_LENGTH,) or not np.all(np.isfinite(vector)):
         raise ValueError(f"invalid feature vector: shape={vector.shape}")
+    if progress is not None:
+        progress("Query fingerprint complete", 6, 6)
     return vector
-

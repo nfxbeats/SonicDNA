@@ -14,6 +14,7 @@ def test_incremental_scan_and_missing_cleanup(tmp_path: Path, monkeypatch) -> No
     sample.write_bytes(b"fixture")
     calls: list[Path] = []
     progress_updates: list[tuple[Path, int, int]] = []
+    discovery_updates: list[int] = []
 
     def fake_extract(path: Path) -> np.ndarray:
         calls.append(path)
@@ -28,6 +29,7 @@ def test_incremental_scan_and_missing_cleanup(tmp_path: Path, monkeypatch) -> No
             progress=lambda path, current, total: progress_updates.append(
                 (path, current, total)
             ),
+            discovery_progress=discovery_updates.append,
         )
         sample.unlink()
         _, third = update_index(database, library)
@@ -37,6 +39,7 @@ def test_incremental_scan_and_missing_cleanup(tmp_path: Path, monkeypatch) -> No
     assert second.indexed == 0
     assert second.unchanged == 1
     assert progress_updates == [(sample, 1, 1)]
+    assert discovery_updates[-1] == 1
     assert calls == [sample]
     assert third.removed == 1
     assert remaining == []

@@ -45,6 +45,12 @@ def test_main_window_launches() -> None:
     assert DONATE_URL == "https://www.paypal.com/donate/?hosted_button_id=KXJEA3SNE5PXC"
     assert window.theme_combo.currentData() == "Cyber"
     assert "drop-down { width: 16px" in window.theme_combo.styleSheet()
+    window._on_search_progress(
+        "Preparing candidate list from 10,000 cached audio fingerprints", 0, 0
+    )
+    assert window.progress.minimum() == 0
+    assert window.progress.maximum() == 0
+    assert window.status.text().endswith("…")
     window.move(-500, -300)
     window._ensure_window_position_visible()
     assert window.x() >= 0

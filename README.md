@@ -55,6 +55,37 @@ Equivalent launcher commands are:
 ./start.sh --debug
 ```
 
+## Updating
+
+Close SonicDNA before updating. The update launchers automatically detect how the project was
+originally obtained.
+
+On Windows:
+
+```powershell
+.\update.bat
+```
+
+PowerShell, macOS, and Linux equivalents are:
+
+```powershell
+.\update.ps1
+```
+
+```sh
+./update.sh
+```
+
+When a valid `.git` worktree is present, the updater verifies that `origin` is the SonicDNA
+repository, refuses to overwrite local changes, and runs a fast-forward-only `git pull`. For a ZIP
+installation, it downloads the current `main` archive, validates it, backs up managed application
+files, replaces them, and rolls back those files if replacement or dependency setup fails.
+
+The updater preserves `.venv`, local ignored files such as `presentation.md`, application settings,
+the audio-fingerprint database, and user theme files. ZIP-installation backups are retained in a
+`SonicDNA-update-backups` directory beside the application folder. Changed Python requirements are
+installed automatically; launch SonicDNA normally after the update completes.
+
 In Windows CMD, include the `.bat` extension: `start.bat --debug`. The bare command `start` is a
 built-in Windows command and does not invoke SonicDNA's launcher.
 
@@ -94,9 +125,19 @@ its first run:
 ```
 
 With no arguments, the launcher opens the SonicDNA desktop interface. Add one or more library
-folders, choose or drop a query sample, and click **Find Similar**. Scanning and feature extraction
-run in a background thread and can be cancelled safely. Completed searches report both the number
-of indexed files compared and the elapsed query-and-ranking time.
+folders, then use **Scan / Update** to discover files and refresh their cached audio fingerprints.
+Choose or drop a query sample and click **Find Similar** to search the existing index immediately,
+without traversing the library folders again. A library that has never completed a scan is indexed
+automatically on its first search. Scanning and feature extraction run in a background thread and
+can be cancelled safely. Completed searches report the number of indexed files compared, elapsed
+query-and-ranking time, and the oldest selected library's index-update time.
+While each recursive file list is being built, the status names the current library folder and
+shows the growing number of supported audio files discovered.
+
+When removing a Sample Library, SonicDNA asks whether its cached audio fingerprints should also be
+deleted. Keeping them makes a temporary library removal faster to reverse; deleting them removes
+the cached audio fingerprints and requires a full scan if that library is added again. Neither choice
+deletes source audio files.
 
 The original command-line workflow remains available by supplying arguments:
 
@@ -142,7 +183,7 @@ sonicdna [--limit COUNT] [--database PATH] [--rebuild] QUERY LIBRARY
 | `-h`, `--help` | Display command-line help and exit. |
 | `--limit COUNT` | Return at most this many ranked matches. The default is `10`. SonicDNA still examines the complete indexed library before returning the top results. |
 | `--database PATH` | Use a custom SQLite index instead of the platform-default application-data location. |
-| `--rebuild` | Discard cached vectors for the selected library and extract every supported file again. |
+| `--rebuild` | Discard cached audio fingerprints for the selected library and extract every supported file again. |
 
 `--debug` is a Windows `start.bat` launcher mode rather than a SonicDNA CLI search argument. It
 opens the desktop interface with an attached CMD window.
@@ -165,14 +206,22 @@ macOS or Linux example:
 ./start.sh /samples/query.wav /samples/library --limit 25
 ```
 
-Use `--rebuild` only when a complete re-extraction is needed. Normal searches already detect and
-process new or modified files while reusing unchanged feature vectors.
+Use `--rebuild` only when a complete re-extraction is needed. The command-line workflow scans for
+new or modified files on each run while reusing unchanged audio fingerprints.
 
 ## Desktop features
 
 - Add and remove multiple recursively scanned library folders
 - Drag one or more folders from the operating-system file manager into the Sample Libraries list
 - Incremental background indexing with progress and cancellation
+- Immediate indexed searches without repeated folder traversal; Scan / Update explicitly refreshes
+  new, changed, and removed files
+- Automatic first scan for libraries that have never been indexed
+- In-memory fingerprint reuse for repeated searches during the current session
+- Determinate loaded/total progress while cached audio fingerprints are decoded from the database
+- Numerical query-analysis progress followed by animated activity for vectorized matrix
+  preparation, standardization, comparison, and ranking
+- Immediate candidate-list preparation status while indexed paths are filtered before matching
 - Browse for or drag-and-drop a query sample using the compact folder button
 - Query files are accepted only when dropped inside the Query Sample panel
 - A 300-pixel query drop target that overlays the filename on a background-loaded waveform and

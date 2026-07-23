@@ -27,6 +27,7 @@ def update_index(
     folder: Path,
     rebuild: bool = False,
     progress: Callable[[Path, int, int], None] | None = None,
+    discovery_progress: Callable[[int], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
 ) -> tuple[int, ScanSummary]:
     """Index new/changed files, retain unchanged vectors, and remove missing files."""
@@ -34,7 +35,7 @@ def update_index(
     if rebuild:
         database.rebuild_folder(folder_id)
     known = database.fingerprints(folder_id)
-    paths = audio_files(folder)
+    paths = audio_files(folder, discovery_progress=discovery_progress)
     present = {str(path.resolve()) for path in paths}
     summary = ScanSummary(discovered=len(paths))
     for position, path in enumerate(paths, 1):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -46,7 +47,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from sonicdna.database import default_database_path
+from sonicdna.database import IndexedSample, IndexDatabase, default_database_path
 from sonicdna.features import SUPPORTED_EXTENSIONS
 from sonicdna.indexing import ScanSummary
 from sonicdna.platform_actions import open_file, reveal_file
@@ -93,6 +94,12 @@ class MainWindow(QMainWindow):
         self._audio_is_playing = False
         self._close_pending = False
         self._waveform_pending: set[str] = set()
+        self._sample_cache: list[IndexedSample] | None = None
+        self._sample_cache_folders: tuple[str, ...] = ()
+        self._sample_cache_scan_times: dict[str, str | None] = {}
+        self._worker_folder_key: tuple[str, ...] = ()
+        self._active_index_scan_times: dict[str, str | None] = {}
+        self._operation_failed = False
         self.waveform_pool = QThreadPool(self)
         self.waveform_pool.setMaxThreadCount(2)
         self._build_ui()
@@ -372,10 +379,64 @@ class MainWindow(QMainWindow):
             if resolved.is_dir() and resolved not in existing:
                 self.folder_list.addItem(str(resolved))
                 existing.add(resolved)
+                self._invalidate_sample_cache()
 
     def remove_folders(self) -> None:
-        for item in self.folder_list.selectedItems():
+        selected = self.folder_list.selectedItems()
+        if not selected:
+            return
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            QMessageBox.information(
+                self,
+                "Operation in Progress",
+                "Wait for the current scan or search to finish, or cancel it, before removing "
+                "a Sample Library.",
+            )
+            return
+        noun = "library" if len(selected) == 1 else "libraries"
+        choice = QMessageBox.question(
+            self,
+            "Remove Sample Libraries",
+            f"Remove the selected {noun} from SonicDNA?\n\n"
+            "Choose Yes to also delete its cached audio fingerprints. Re-adding it will require "
+            "a full scan.\n\n"
+            "Choose No to keep the cache for faster re-adding later. Source audio files are "
+            "never deleted.",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if choice == QMessageBox.StandardButton.Cancel:
+            return
+
+        removed_entries = 0
+        if choice == QMessageBox.StandardButton.Yes:
+            try:
+                with IndexDatabase() as database:
+                    for item in selected:
+                        removed_entries += database.remove_library(Path(item.text()))
+            except Exception as exc:
+                QMessageBox.warning(
+                    self,
+                    "Database Cleanup Failed",
+                    f"The libraries were not removed because their cached audio fingerprints "
+                    f"could not "
+                    f"be deleted:\n\n{type(exc).__name__}: {exc}",
+                )
+                return
+
+        for item in selected:
             self.folder_list.takeItem(self.folder_list.row(item))
+        self._invalidate_sample_cache()
+        if choice == QMessageBox.StandardButton.Yes:
+            self.status.setText(
+                f"Removed {len(selected)} {noun} and {removed_entries} cached audio fingerprints."
+            )
+        else:
+            self.status.setText(
+                f"Removed {len(selected)} {noun}; cached audio fingerprints were retained."
+            )
 
     def browse_query(self) -> None:
         pattern = "Audio files (*.wav *.flac *.aiff *.aif *.ogg *.mp3);;All files (*)"
@@ -403,7 +464,7 @@ class MainWindow(QMainWindow):
         if not self.folders():
             QMessageBox.information(self, "SonicDNA", "Add at least one library folder first.")
             return
-        self._start_worker(None)
+        self._start_worker(None, refresh_index=True)
 
     def find_similar(self) -> None:
         if self.query_path is None:
@@ -412,27 +473,56 @@ class MainWindow(QMainWindow):
         if not self.folders():
             QMessageBox.information(self, "SonicDNA", "Add at least one library folder first.")
             return
-        self._start_worker(self.query_path)
+        self._start_worker(self.query_path, refresh_index=False)
 
-    def _start_worker(self, query: Path | None) -> None:
+    def _start_worker(self, query: Path | None, refresh_index: bool) -> None:
         if self.worker_thread is not None:
             return
+        if refresh_index:
+            self._invalidate_sample_cache()
+        folders = self.folders()
+        folder_key = tuple(str(folder.resolve()) for folder in folders)
+        use_cache = (
+            query is not None
+            and not refresh_index
+            and self._sample_cache is not None
+            and folder_key == self._sample_cache_folders
+        )
         self.progress.setValue(0)
-        self.status.setText("Starting scan…")
+        self.progress.setRange(0, 100)
+        self._operation_failed = False
+        if refresh_index:
+            self.status.setText("Starting library scan…")
+        elif use_cache:
+            self.status.setText("Searching cached audio fingerprints…")
+        else:
+            self.status.setText("Loading cached audio fingerprints…")
+            self.progress.setRange(0, 0)
         self.scan_button.setEnabled(False)
         self.find_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.worker_thread = QThread(self)
+        self._worker_folder_key = folder_key
+        self._active_index_scan_times = (
+            dict(self._sample_cache_scan_times) if use_cache else {}
+        )
         self.worker = LibraryWorker(
-            self.folders(),
+            folders,
             query,
             self.result_count.value(),
             weights=self.similarity_weights(),
+            refresh_index=refresh_index,
+            cached_samples=self._sample_cache if use_cache else None,
+            cached_scan_times=self._sample_cache_scan_times if use_cache else None,
         )
         self.worker.moveToThread(self.worker_thread)
         self.worker_thread.started.connect(self.worker.run)
+        self.worker.discovery_progress.connect(self._on_discovery_progress)
         self.worker.progress.connect(self._on_progress)
         self.worker.folder_complete.connect(self._on_folder_complete)
+        self.worker.fingerprint_loading.connect(self._on_fingerprint_loading)
+        self.worker.search_progress.connect(self._on_search_progress)
+        self.worker.samples_ready.connect(self._cache_worker_samples)
         self.worker.results_ready.connect(self._show_results)
         self.worker.failed.connect(self._show_error)
         self.worker.finished.connect(self._work_finished)
@@ -441,16 +531,76 @@ class MainWindow(QMainWindow):
         self.worker_thread.finished.connect(self._thread_finished)
         self.worker_thread.start()
 
+    def _invalidate_sample_cache(self) -> None:
+        self._sample_cache = None
+        self._sample_cache_folders = ()
+        self._sample_cache_scan_times = {}
+
+    def _cache_worker_samples(
+        self,
+        samples: list[IndexedSample],
+        scan_times: dict[str, str | None],
+    ) -> None:
+        current_key = tuple(str(folder.resolve()) for folder in self.folders())
+        if self._worker_folder_key != current_key:
+            return
+        self._sample_cache = list(samples)
+        self._sample_cache_folders = self._worker_folder_key
+        self._sample_cache_scan_times = dict(scan_times)
+        self._active_index_scan_times = dict(scan_times)
+
+    def _index_freshness_text(self) -> str:
+        timestamps: list[datetime] = []
+        for value in self._active_index_scan_times.values():
+            if not value:
+                continue
+            try:
+                timestamps.append(datetime.fromisoformat(value).astimezone())
+            except ValueError:
+                continue
+        if not timestamps:
+            return ""
+        oldest = min(timestamps)
+        formatted = oldest.strftime("%b %d, %Y at %I:%M %p").replace(" 0", " ")
+        suffix = " (oldest library)" if len(timestamps) > 1 else ""
+        return f"Index last updated {formatted}{suffix}."
+
     def cancel_work(self) -> None:
         if self.worker is not None:
             self.worker.cancel()
             self.status.setText("Cancelling after the current file…")
 
     def _on_progress(self, path: str, current: int, total: int) -> None:
+        self.progress.setRange(0, 100)
         self.progress.setValue(round(current / max(total, 1) * 100))
         self.status.setText(f"Scanning {current}/{total}: {Path(path).name}")
 
+    def _on_discovery_progress(self, folder: str, discovered: int) -> None:
+        folder_path = Path(folder)
+        folder_name = folder_path.name or str(folder_path)
+        self.progress.setRange(0, 0)
+        self.status.setText(
+            f"Building file list for {folder_name}: {discovered} audio file(s) found…"
+        )
+
+    def _on_fingerprint_loading(self, loaded: int, total: int) -> None:
+        self.progress.setRange(0, max(total, 1))
+        self.progress.setValue(loaded if total else 1)
+        self.status.setText(
+            f"Loading cached audio fingerprints: {loaded:,} / {total:,}"
+        )
+
+    def _on_search_progress(self, stage: str, current: int, total: int) -> None:
+        if total > 0:
+            self.progress.setRange(0, total)
+            self.progress.setValue(current)
+            self.status.setText(f"{stage}: {current:,} / {total:,}")
+        else:
+            self.progress.setRange(0, 0)
+            self.status.setText(f"{stage}…")
+
     def _on_folder_complete(self, folder: str, summary: ScanSummary) -> None:
+        self.progress.setRange(0, 100)
         self.status.setText(
             f"{Path(folder).name}: {summary.indexed} indexed, "
             f"{summary.unchanged} unchanged, {len(summary.errors)} skipped"
@@ -462,6 +612,7 @@ class MainWindow(QMainWindow):
         searched_files: int | None = None,
         elapsed_seconds: float | None = None,
     ) -> None:
+        self.progress.setRange(0, 100)
         self.current_results = results
         self.playing_row = -1
         self.playing_path = None
@@ -485,6 +636,9 @@ class MainWindow(QMainWindow):
         status = f"Found {len(results)} similar sample(s)."
         if searched_files is not None and elapsed_seconds is not None:
             status += f" Searched {searched_files} files in {elapsed_seconds:.2f} seconds."
+        freshness = self._index_freshness_text()
+        if freshness:
+            status += f" {freshness}"
         self.status.setText(status)
         QTimer.singleShot(0, self._schedule_visible_waveforms)
 
@@ -534,14 +688,26 @@ class MainWindow(QMainWindow):
         self.results.viewport().update(self.results.visualItemRect(waveform_item))
 
     def _show_error(self, message: str) -> None:
+        self.progress.setRange(0, 100)
+        self._operation_failed = True
         self.status.setText("Operation failed")
         QMessageBox.critical(self, "SonicDNA Error", message)
 
     def _work_finished(self, cancelled: bool) -> None:
+        self.progress.setRange(0, 100)
         if cancelled:
             self.status.setText("Operation cancelled; completed records were preserved.")
         else:
             self.progress.setValue(100)
+            if (
+                not self._operation_failed
+                and self.worker is not None
+                and self.worker.query is None
+            ):
+                freshness = self._index_freshness_text()
+                self.status.setText(
+                    f"Library scan complete. {freshness}".rstrip()
+                )
         self.scan_button.setEnabled(True)
         self.find_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
