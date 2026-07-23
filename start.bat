@@ -16,14 +16,34 @@ if not exist ".venv\Scripts\python.exe" (
     echo [1/3] Virtual environment created at %CD%\.venv
 )
 
-".venv\Scripts\python.exe" -c "import librosa, numpy, PySide6, scipy, sklearn, soundfile" >nul 2>nul
-if errorlevel 1 (
+set "dependency_stamp=.venv\.sonicdna-dependencies.sha256"
+for /f "delims=" %%H in ('.venv\Scripts\python.exe -c "import hashlib,json,tomllib; d=tomllib.load(open('pyproject.toml','rb'))['project']; print(hashlib.sha256(json.dumps([d.get('requires-python'),d.get('dependencies',[])],sort_keys=True).encode()).hexdigest())"') do set "current_dependencies=%%H"
+if not defined current_dependencies goto :error
+set "installed_dependencies="
+if exist "%dependency_stamp%" set /p "installed_dependencies="<"%dependency_stamp%"
+
+set "dependencies_ready=1"
+if not "!current_dependencies!"=="!installed_dependencies!" set "dependencies_ready=0"
+if "!dependencies_ready!"=="1" (
+    ".venv\Scripts\python.exe" -c "import importlib.metadata as m; m.version('sonicdna')" >nul 2>nul
+    if errorlevel 1 set "dependencies_ready=0"
+)
+if "!dependencies_ready!"=="1" (
+    ".venv\Scripts\python.exe" -m pip check >nul 2>nul
+    if errorlevel 1 set "dependencies_ready=0"
+)
+
+if "!dependencies_ready!"=="0" (
     echo [2/3] Installing SonicDNA and its dependencies. This can take several minutes...
     ".venv\Scripts\python.exe" -m pip install --verbose --progress-bar on -e .
     if errorlevel 1 goto :error
+    >"%dependency_stamp%" echo !current_dependencies!
     echo [2/3] Dependency installation completed.
-    echo [3/3] Setup complete. Starting Warbeats SonicDNA...
+) else (
+    echo [2/3] Python dependency requirements are up to date.
 )
+
+echo [3/3] Setup complete. Starting Warbeats SonicDNA...
 
 if /I "%~1"=="--debug" (
     echo Starting Warbeats SonicDNA in debug mode...

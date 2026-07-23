@@ -10,12 +10,29 @@ if [ ! -x .venv/bin/python ]; then
 fi
 
 echo "[2/3] Checking required Python libraries..."
-if ! .venv/bin/python -c "import librosa, numpy, PySide6, scipy, sklearn, soundfile" >/dev/null 2>&1; then
+dependency_stamp=".venv/.sonicdna-dependencies.sha256"
+current_dependencies=$(.venv/bin/python -c "import hashlib,json,tomllib; d=tomllib.load(open('pyproject.toml','rb'))['project']; print(hashlib.sha256(json.dumps([d.get('requires-python'),d.get('dependencies',[])],sort_keys=True).encode()).hexdigest())")
+installed_dependencies=""
+if [ -f "$dependency_stamp" ]; then
+    installed_dependencies=$(tr -d '\r\n' < "$dependency_stamp")
+fi
+
+dependencies_ready=true
+if [ "$current_dependencies" != "$installed_dependencies" ]; then
+    dependencies_ready=false
+elif ! .venv/bin/python -c "import importlib.metadata as m; m.version('sonicdna')" >/dev/null 2>&1; then
+    dependencies_ready=false
+elif ! .venv/bin/python -m pip check >/dev/null 2>&1; then
+    dependencies_ready=false
+fi
+
+if [ "$dependencies_ready" = false ]; then
     echo "[2/3] Installing SonicDNA and its dependencies. This can take several minutes..."
     .venv/bin/python -m pip install --verbose --progress-bar on -e .
+    printf '%s\n' "$current_dependencies" > "$dependency_stamp"
     echo "[2/3] Dependency installation completed."
 else
-    echo "[2/3] Required Python libraries are already installed."
+    echo "[2/3] Python dependency requirements are up to date."
 fi
 
 echo "[3/3] Starting Warbeats SonicDNA..."
