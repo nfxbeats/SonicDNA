@@ -5,7 +5,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QGroupBox, QPushButton, QStyle, QStyleOptionViewItem
 
-from sonicdna.ui.main_window import DONATE_URL, MainWindow, REPOSITORY_URL
+from sonicdna.ui.main_window import (
+    DONATE_URL,
+    MainWindow,
+    REPOSITORY_URL,
+    format_file_size,
+)
 from sonicdna.ui.play_indicator_delegate import (
     PlayIndicatorDelegate,
     UnhighlightedItemDelegate,
@@ -69,3 +74,9 @@ def test_result_delegate_removes_selection_and_focus_states() -> None:
     clean = without_selection(option)
     assert not clean.state & QStyle.StateFlag.State_Selected
     assert not clean.state & QStyle.StateFlag.State_HasFocus
+
+
+def test_file_size_status_formatting() -> None:
+    assert format_file_size(0) == "0 bytes"
+    assert format_file_size(1536) == "1.5 KB"
+    assert format_file_size(5 * 1024 * 1024) == "5.0 MB"

@@ -76,6 +76,18 @@ REPOSITORY_URL = "https://github.com/nfxbeats/SonicDNA/tree/main#"
 DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=KXJEA3SNE5PXC"
 
 
+def format_file_size(size_bytes: int) -> str:
+    """Format a nonnegative byte count for compact status display."""
+    size = float(max(0, size_bytes))
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            if unit == "bytes":
+                return f"{int(size):,} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    raise AssertionError("unreachable")
+
+
 class MainWindow(QMainWindow):
     """Library, query, and search workflow for the Phase 3 application."""
 
@@ -132,7 +144,13 @@ class MainWindow(QMainWindow):
         library_layout.addWidget(self.cancel_button, 3, 1)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
-        self.status = QLabel(f"Index: {default_database_path()}")
+        database_path = default_database_path()
+        database_size = (
+            format_file_size(database_path.stat().st_size)
+            if database_path.is_file()
+            else "not created"
+        )
+        self.status = QLabel(f"Index: {database_path} ({database_size})")
         library_layout.addWidget(self.progress, 4, 0, 1, 2)
         library_layout.addWidget(self.status, 5, 0, 1, 2)
         query_group = QueryDropGroupBox("Query Sample (drop an audio file in this panel)")

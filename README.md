@@ -253,6 +253,7 @@ master asset; `sonicdna.ico` is its Windows packaging derivative.
 
 The first run can take several minutes while the scientific Python and Qt dependencies install.
 Audio files are read for analysis only; SonicDNA never modifies them.
+At startup, the status line shows the platform-specific index path and its current file size.
 
 ## Data storage and privacy
 
